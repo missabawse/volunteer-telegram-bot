@@ -126,7 +126,7 @@ export const addVolunteerCommand = async (ctx: CommandContext<Context>) => {
   const name = args.slice(1).join(' ').replace(/"/g, ''); // Remove quotes if present
 
   // Validate telegram handle
-  const telegramHandle = validateTelegramHandle(handleInput);
+  const telegramHandle: string | null = validateTelegramHandle(handleInput || '');
   
   if (!telegramHandle) {
     await ctx.reply('❌ Invalid Telegram handle format. Handle should be 5-32 characters, alphanumeric and underscores only.');
@@ -219,7 +219,7 @@ export const assignRoleCommand = async (ctx: CommandContext<Context>) => {
     return;
   }
 
-  const eventId = parseInt(args[0]);
+  const eventId = parseInt(args[0] || '');
   const role = args[1] as any;
   const handleInput = args[2];
 
@@ -229,7 +229,7 @@ export const assignRoleCommand = async (ctx: CommandContext<Context>) => {
     return;
   }
 
-  const telegramHandle = validateTelegramHandle(handleInput);
+  const telegramHandle: string | null = validateTelegramHandle(handleInput || '');
   if (!telegramHandle) {
     await ctx.reply('❌ Invalid Telegram handle format.');
     return;

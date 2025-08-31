@@ -87,7 +87,7 @@ export const commitCommand = async (ctx: CommandContext<Context>) => {
     return;
   }
 
-  const eventId = parseInt(args[0]);
+  const eventId = parseInt(args[0] || '');
   const role = args[1] as any;
 
   // Validate event ID

@@ -140,13 +140,21 @@ export const parseDate = (dateInput: string): Date | null => {
   
   let parsedDate: Date;
   
-  if (formats[0].test(dateInput)) {
+  if (formats[0]?.test(dateInput)) {
     // ISO format
     parsedDate = new Date(dateInput);
-  } else if (formats[1].test(dateInput) || formats[2].test(dateInput)) {
+  } else if (formats[1]?.test(dateInput) || formats[2]?.test(dateInput)) {
     // DD/MM/YYYY or DD-MM-YYYY
     const separator = dateInput.includes('/') ? '/' : '-';
-    const [day, month, year] = dateInput.split(separator).map(Number);
+    const parts = dateInput.split(separator).map(Number);
+    const day = parts[0];
+    const month = parts[1];
+    const year = parts[2];
+    
+    if (day === undefined || month === undefined || year === undefined) {
+      return null;
+    }
+    
     parsedDate = new Date(year, month - 1, day);
   } else {
     // Try natural language parsing
