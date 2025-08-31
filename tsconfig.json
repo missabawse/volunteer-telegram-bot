@@ -12,7 +12,9 @@
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "incremental": true,
+    "noUncheckedIndexedAccess": true,
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

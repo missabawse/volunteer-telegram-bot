@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/bot.js",
     "dev": "ts-node src/bot.ts",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "keywords": ["telegram", "bot", "grammy", "supabase", "volunteer", "management"],
   "author": "",
