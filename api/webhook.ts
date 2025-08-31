@@ -119,7 +119,31 @@ bot.on('message:text', async (ctx) => {
   await handleFinalizationConfirmation(ctx);
 });
 
-// Create webhook handler
-const handleWebhook = webhookCallback(bot, 'std/http');
+// Initialize bot once
+let botInitialized = false;
 
-export default handleWebhook;
+// Create webhook handler for Vercel
+export default async function handler(req: any, res: any) {
+  try {
+    // Initialize bot if not already done
+    if (!botInitialized) {
+      await bot.init();
+      botInitialized = true;
+    }
+
+    if (req.method === 'POST') {
+      // Process the Telegram update
+      await bot.handleUpdate(req.body);
+      res.status(200).json({ ok: true });
+    } else {
+      // Handle GET requests (for testing)
+      res.status(200).json({ 
+        message: 'WomenDevs SG Volunteer Bot is running!',
+        bot: '@womendevssg_volunteer_bot'
+      });
+    }
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
