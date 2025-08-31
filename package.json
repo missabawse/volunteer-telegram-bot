@@ -1,0 +1,25 @@
+{
+  "name": "volunteer-management-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for volunteer management using grammY and Supabase",
+  "main": "dist/bot.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/bot.js",
+    "dev": "ts-node src/bot.ts",
+    "watch": "tsc --watch"
+  },
+  "keywords": ["telegram", "bot", "grammy", "supabase", "volunteer", "management"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "grammy": "^1.19.2",
+    "@supabase/supabase-js": "^2.38.4",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.10",
+    "typescript": "^5.2.2",
+    "ts-node": "^10.9.1"
+  }
+}
