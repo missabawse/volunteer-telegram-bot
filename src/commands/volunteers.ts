@@ -2,9 +2,8 @@ import { Context, CommandContext } from 'grammy';
 import { DrizzleDatabaseService } from '../db-drizzle';
 import { 
   formatVolunteerStatus, 
-  validateTelegramHandle, 
   canVolunteerCommit,
-  formatRoleName,
+  formatTaskStatus,
   checkAndPromoteVolunteers
 } from '../utils';
 
@@ -58,57 +57,31 @@ export const myStatusCommand = async (ctx: CommandContext<Context>) => {
   await ctx.reply(statusMessage, { parse_mode: 'Markdown' });
 };
 
-// /commit command - sign up for a role in an event
+// /commit command - volunteer commits to a task
 export const commitCommand = async (ctx: CommandContext<Context>) => {
+  const args = ctx.match?.toString().trim().split(' ') || [];
   const telegramHandle = ctx.from?.username;
   
   if (!telegramHandle) {
-    await ctx.reply('❌ Please set a Telegram username to use this bot.');
+    await ctx.reply('❌ Your Telegram account must have a username to use this command.');
     return;
   }
 
-  // Parse command arguments
-  const args = ctx.match?.toString().trim().split(' ');
-  
-  if (!args || args.length < 2) {
+  if (args.length !== 1) {
     await ctx.reply(
-      `❌ **Usage:** \`/commit <event_id> <role>\`\n\n` +
-      `**Available roles:**\n` +
-      `• date_confirmation\n` +
-      `• speaker_confirmation\n` +
-      `• venue_confirmation\n` +
-      `• pre_event_marketing\n` +
-      `• post_event_marketing\n` +
-      `• moderator\n` +
-      `• facilitator\n\n` +
-      `**Example:** \`/commit 1 moderator\``,
+      '❌ **Usage:** `/commit <task_id>`\n\n' +
+      'Use `/list_events` to see available events and their tasks.\n\n' +
+      '**Example:** `/commit 5`',
       { parse_mode: 'Markdown' }
     );
     return;
   }
 
-  const eventId = parseInt(args[0] || '');
-  const role = args[1] as any;
+  const taskId = parseInt(args[0] || '');
 
-  // Validate event ID
-  if (isNaN(eventId)) {
-    await ctx.reply('❌ Invalid event ID. Please provide a valid number.');
-    return;
-  }
-
-  // Validate role
-  const validRoles = [
-    'date_confirmation',
-    'speaker_confirmation', 
-    'venue_confirmation',
-    'pre_event_marketing',
-    'post_event_marketing',
-    'moderator',
-    'facilitator'
-  ];
-
-  if (!validRoles.includes(role)) {
-    await ctx.reply(`❌ Invalid role. Available roles: ${validRoles.join(', ')}`);
+  // Validate task ID
+  if (isNaN(taskId)) {
+    await ctx.reply('❌ Invalid task ID. Please provide a valid number.');
     return;
   }
 
@@ -120,33 +93,27 @@ export const commitCommand = async (ctx: CommandContext<Context>) => {
     return;
   }
 
-  // Check if volunteer is inactive
-  if (volunteer.status === 'inactive') {
-    await ctx.reply('❌ Your volunteer status is inactive. Please contact an admin to reactivate your account.');
-    return;
-  }
-
-  // Check if event exists
-  const event = await DrizzleDatabaseService.getEvent(eventId);
+  // Check if task exists
+  const task = await DrizzleDatabaseService.getTask(taskId);
   
-  if (!event) {
-    await ctx.reply('❌ Event not found. Please check the event ID.');
+  if (!task) {
+    await ctx.reply('❌ Task not found. Please check the task ID.');
     return;
   }
 
-  // Check if volunteer can commit to this role
-  const { canCommit, reason } = await canVolunteerCommit(volunteer.id, eventId, role);
+  // Check if volunteer can commit to this task
+  const { canCommit, reason } = await canVolunteerCommit(volunteer.id, taskId);
   
   if (!canCommit) {
     await ctx.reply(`❌ ${reason}`);
     return;
   }
 
-  // Assign volunteer to role
-  const success = await DrizzleDatabaseService.assignVolunteerToRole(eventId, role, volunteer.id);
+  // Assign volunteer to task
+  const success = await DrizzleDatabaseService.assignVolunteerToTask(taskId, volunteer.id);
   
   if (!success) {
-    await ctx.reply('❌ Failed to assign role. Please try again later.');
+    await ctx.reply('❌ Failed to assign task. Please try again later.');
     return;
   }
 
@@ -154,16 +121,121 @@ export const commitCommand = async (ctx: CommandContext<Context>) => {
   await DrizzleDatabaseService.incrementVolunteerCommitments(volunteer.id);
 
   // Check for promotion after commitment
-  const updatedVolunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
-  if (updatedVolunteer) {
-    await checkAndPromoteVolunteers(ctx.api as any);
-  }
+  await checkAndPromoteVolunteers(ctx.api as any);
 
-  const roleDisplay = formatRoleName(role);
+  // Get event details for confirmation
+  const event = await DrizzleDatabaseService.getEvent(task.event_id);
+  
   await ctx.reply(
-    `✅ **Success!** You've been assigned as **${roleDisplay}** for "${event.title}".\n\n` +
-    `Your commitment count: ${volunteer.commitments + 1}\n` +
-    `Use /my_status to check your progress!`,
+    `✅ **Successfully committed to task!**\n\n` +
+    `Task: ${task.title}\n` +
+    `Event: ${event?.title || 'Unknown'}\n` +
+    `Your commitment count: ${volunteer.commitments + 1}\n\n` +
+    `Thank you for volunteering! 🙏`,
     { parse_mode: 'Markdown' }
   );
+};
+
+// /assign_task command (admin only) - assign volunteer to task
+export const assignTaskCommand = async (ctx: CommandContext<Context>) => {
+  const args = ctx.match?.toString().trim().split(' ') || [];
+  
+  if (args.length !== 2) {
+    await ctx.reply(
+      '❌ **Usage:** `/assign_task <task_id> @volunteer`\n\n' +
+      '**Example:** `/assign_task 5 @johndoe`',
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  const taskId = parseInt(args[0]!);
+  const telegramHandle = args[1]?.replace('@', '') || '';
+
+  if (isNaN(taskId)) {
+    await ctx.reply('❌ Invalid task ID. Please provide a valid number.');
+    return;
+  }
+
+  // Check if task exists
+  const task = await DrizzleDatabaseService.getTask(taskId);
+  if (!task) {
+    await ctx.reply('❌ Task not found.');
+    return;
+  }
+
+  // Check if volunteer exists
+  const volunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
+  if (!volunteer) {
+    await ctx.reply('❌ Volunteer not found.');
+    return;
+  }
+
+  // Assign volunteer to task
+  const success = await DrizzleDatabaseService.assignVolunteerToTask(taskId, volunteer.id, ctx.from?.id);
+  
+  if (success) {
+    const event = await DrizzleDatabaseService.getEvent(task.event_id);
+    await ctx.reply(
+      `✅ **Task assigned successfully!**\n\n` +
+      `Task: ${task.title}\n` +
+      `Event: ${event?.title || 'Unknown'}\n` +
+      `Assigned to: ${volunteer.name} (@${volunteer.telegram_handle})`,
+      { parse_mode: 'Markdown' }
+    );
+  } else {
+    await ctx.reply('❌ Failed to assign task. Please try again.');
+  }
+};
+
+// /update_task_status command - update task status
+export const updateTaskStatusCommand = async (ctx: CommandContext<Context>) => {
+  const args = ctx.match?.toString().trim().split(' ') || [];
+  
+  if (args.length !== 2) {
+    await ctx.reply(
+      '❌ **Usage:** `/update_task_status <task_id> <status>`\n\n' +
+      '**Available statuses:** todo, in_progress, complete\n\n' +
+      '**Example:** `/update_task_status 5 complete`',
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  const taskId = parseInt(args[0]!);
+  const status = args[1] as 'todo' | 'in_progress' | 'complete';
+
+  if (isNaN(taskId)) {
+    await ctx.reply('❌ Invalid task ID. Please provide a valid number.');
+    return;
+  }
+
+  const validStatuses = ['todo', 'in_progress', 'complete'];
+  if (!validStatuses.includes(status)) {
+    await ctx.reply('❌ Invalid status. Use: todo, in_progress, or complete');
+    return;
+  }
+
+  // Check if task exists
+  const task = await DrizzleDatabaseService.getTask(taskId);
+  if (!task) {
+    await ctx.reply('❌ Task not found.');
+    return;
+  }
+
+  // Update task status
+  const success = await DrizzleDatabaseService.updateTaskStatus(taskId, status);
+  
+  if (success) {
+    const event = await DrizzleDatabaseService.getEvent(task.event_id);
+    await ctx.reply(
+      `✅ **Task status updated!**\n\n` +
+      `Task: ${task.title}\n` +
+      `Event: ${event?.title || 'Unknown'}\n` +
+      `New status: ${formatTaskStatus(status)}`,
+      { parse_mode: 'Markdown' }
+    );
+  } else {
+    await ctx.reply('❌ Failed to update task status. Please try again.');
+  }
 };

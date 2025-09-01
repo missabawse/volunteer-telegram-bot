@@ -1,14 +1,14 @@
 import { eq, and } from 'drizzle-orm';
 import { db } from './drizzle';
-import { volunteers, events, eventRoles, admins } from './schema';
-import type { NewVolunteer, NewEvent, NewEventRole } from './schema';
+import { volunteers, events, tasks, taskAssignments, admins } from './schema';
+import type { NewVolunteer, NewEvent, NewTask, NewTaskAssignment } from './schema';
 
-// Legacy compatible types
+// Updated types for new schema
 interface Volunteer {
   id: number;
   name: string;
   telegram_handle: string;
-  status: 'probation' | 'full' | 'inactive';
+  status: 'probation' | 'full' | 'lead';
   commitments: number;
   probation_start_date: string;
   created_at: string;
@@ -19,20 +19,32 @@ interface Event {
   id: number;
   title: string;
   date: string;
-  format: 'workshop' | 'panel' | 'online' | 'in-person';
-  status: 'planning' | 'published';
+  format: 'moderated_discussion' | 'conference' | 'talk' | 'hangout' | 'meeting' | 
+          'external_speaker' | 'newsletter' | 'social_media_takeover' | 'workshop' | 'panel' | 'others';
+  status: 'planning' | 'published' | 'completed' | 'cancelled';
+  venue?: string | null;
   details?: string;
+  created_by?: number | null;
   created_at: string;
   updated_at: string;
 }
 
-interface EventRole {
+interface Task {
   id: number;
   event_id: number;
-  role: 'date_confirmation' | 'speaker_confirmation' | 'venue_confirmation' | 
-        'pre_event_marketing' | 'post_event_marketing' | 'moderator' | 'facilitator';
-  assigned_to?: number | null;
+  title: string;
+  description?: string;
+  status: 'todo' | 'in_progress' | 'complete';
   created_at: string;
+  updated_at: string;
+}
+
+interface TaskAssignment {
+  id: number;
+  task_id: number;
+  volunteer_id: number;
+  assigned_by?: number | null;
+  assigned_at: string;
 }
 
 // Helper function to convert dates
@@ -64,12 +76,12 @@ export class DrizzleDatabaseService {
     }
   }
 
-  static async createVolunteer(name: string, telegramHandle: string): Promise<Volunteer | null> {
+  static async createVolunteer(name: string, telegramHandle: string, status: Volunteer['status'] = 'probation'): Promise<Volunteer | null> {
     try {
       const newVolunteer: NewVolunteer = {
         name,
         telegram_handle: telegramHandle,
-        status: 'probation',
+        status,
         commitments: 0,
         probation_start_date: new Date(),
       };
@@ -163,13 +175,15 @@ export class DrizzleDatabaseService {
   }
 
   // Event operations
-  static async createEvent(title: string, date: string, format: Event['format'], details?: string): Promise<Event | null> {
+  static async createEvent(title: string, date: string, format: Event['format'], details?: string, venue?: string, createdBy?: number): Promise<Event | null> {
     try {
       const newEvent: NewEvent = {
         title,
         date: new Date(date),
         format,
         details,
+        venue,
+        created_by: createdBy,
         status: 'planning'
       };
 
@@ -238,7 +252,9 @@ export class DrizzleDatabaseService {
       return result.map(event => ({
         ...event,
         date: toISOString(event.date),
+        venue: event.venue,
         details: event.details || undefined,
+        created_by: event.created_by,
         created_at: toISOString(event.created_at),
         updated_at: toISOString(event.updated_at),
       }));
@@ -248,63 +264,205 @@ export class DrizzleDatabaseService {
     }
   }
 
-  // Event role operations
-  static async createEventRole(eventId: number, role: EventRole['role']): Promise<EventRole | null> {
+  // Task operations
+  static async createTask(eventId: number, title: string, description?: string): Promise<Task | null> {
     try {
-      const newEventRole: NewEventRole = {
+      const newTask: NewTask = {
         event_id: eventId,
-        role
+        title,
+        description,
+        status: 'todo'
       };
 
-      const result = await db.insert(eventRoles)
-        .values(newEventRole)
+      const result = await db.insert(tasks)
+        .values(newTask)
         .returning();
 
       if (!result[0]) return null;
       
-      const eventRole = result[0];
+      const task = result[0];
       return {
-        ...eventRole,
-        event_id: eventRole.event_id || 0,
-        assigned_to: eventRole.assigned_to,
-        created_at: toISOString(eventRole.created_at),
+        ...task,
+        event_id: task.event_id || 0,
+        description: task.description || undefined,
+        created_at: toISOString(task.created_at),
+        updated_at: toISOString(task.updated_at),
       };
     } catch (error) {
-      console.error('Error creating event role:', error);
+      console.error('Error creating task:', error);
       return null;
     }
   }
 
-  static async assignVolunteerToRole(eventId: number, role: EventRole['role'], volunteerId: number): Promise<boolean> {
+  static async assignVolunteerToTask(taskId: number, volunteerId: number, assignedBy?: number): Promise<boolean> {
     try {
-      await db.update(eventRoles)
-        .set({ assigned_to: volunteerId })
-        .where(and(
-          eq(eventRoles.event_id, eventId),
-          eq(eventRoles.role, role)
-        ));
+      const newAssignment: NewTaskAssignment = {
+        task_id: taskId,
+        volunteer_id: volunteerId,
+        assigned_by: assignedBy
+      };
+
+      await db.insert(taskAssignments)
+        .values(newAssignment);
 
       return true;
     } catch (error) {
-      console.error('Error assigning volunteer to role:', error);
+      console.error('Error assigning volunteer to task:', error);
       return false;
     }
   }
 
-  static async getEventRoles(eventId: number): Promise<EventRole[]> {
+  static async removeVolunteerFromTask(taskId: number, volunteerId: number): Promise<boolean> {
+    try {
+      await db.delete(taskAssignments)
+        .where(and(
+          eq(taskAssignments.task_id, taskId),
+          eq(taskAssignments.volunteer_id, volunteerId)
+        ));
+      return true;
+    } catch (error) {
+      console.error('Error removing volunteer from task:', error);
+      return false;
+    }
+  }
+
+  static async getEventTasks(eventId: number): Promise<Task[]> {
     try {
       const result = await db.select()
-        .from(eventRoles)
-        .where(eq(eventRoles.event_id, eventId));
+        .from(tasks)
+        .where(eq(tasks.event_id, eventId));
 
-      return result.map(eventRole => ({
-        ...eventRole,
-        event_id: eventRole.event_id || 0,
-        assigned_to: eventRole.assigned_to,
-        created_at: toISOString(eventRole.created_at),
+      return result.map(task => ({
+        id: task.id || 0,
+        event_id: task.event_id || 0,
+        title: task.title || '',
+        description: task.description || undefined,
+        status: task.status || 'todo',
+        created_at: toISOString(task.created_at),
+        updated_at: toISOString(task.updated_at),
       }));
     } catch (error) {
-      console.error('Error fetching event roles:', error);
+      console.error('Error fetching event tasks:', error);
+      return [];
+    }
+  }
+
+  // Get a single task by ID
+  static async getTask(taskId: number): Promise<Task | null> {
+    try {
+      const result = await db.select()
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1);
+
+      const task = result[0];
+      if (!task) return null;
+
+      return {
+        id: task.id || 0,
+        event_id: task.event_id || 0,
+        title: task.title || '',
+        description: task.description || undefined,
+        status: task.status || 'todo',
+        created_at: toISOString(task.created_at),
+        updated_at: toISOString(task.updated_at),
+      };
+    } catch (error) {
+      console.error('Error fetching task:', error);
+      return null;
+    }
+  }
+
+  static async updateTaskStatus(taskId: number, status: 'todo' | 'in_progress' | 'complete'): Promise<boolean> {
+    try {
+      await db.update(tasks)
+        .set({ 
+          status,
+          updated_at: new Date()
+        })
+        .where(eq(tasks.id, taskId));
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      return false;
+    }
+  }
+
+  static async createVolunteerWithStatus(name: string, telegramHandle: string, status: 'probation' | 'full' | 'lead'): Promise<Volunteer | null> {
+    try {
+      const result = await db.insert(volunteers).values({
+        name,
+        telegram_handle: telegramHandle,
+        status,
+        probation_start_date: status === 'probation' ? new Date() : null,
+        commitments: 0,
+        created_at: new Date(),
+        updated_at: new Date(),
+      }).returning();
+
+      const volunteer = result[0];
+      if (!volunteer) return null;
+
+      return {
+        id: volunteer.id || 0,
+        name: volunteer.name || '',
+        telegram_handle: volunteer.telegram_handle || '',
+        status: volunteer.status || 'probation',
+        probation_start_date: toISOString(volunteer.probation_start_date),
+        commitments: volunteer.commitments || 0,
+        created_at: toISOString(volunteer.created_at),
+        updated_at: toISOString(volunteer.updated_at),
+      };
+    } catch (error) {
+      console.error('Error creating volunteer with status:', error);
+      return null;
+    }
+  }
+
+  static async getTaskAssignments(taskId: number): Promise<TaskAssignment[]> {
+    try {
+      const result = await db.select()
+        .from(taskAssignments)
+        .where(eq(taskAssignments.task_id, taskId));
+
+      return result.map(assignment => ({
+        ...assignment,
+        task_id: assignment.task_id || 0,
+        volunteer_id: assignment.volunteer_id || 0,
+        assigned_at: toISOString(assignment.assigned_at),
+      }));
+    } catch (error) {
+      console.error('Error fetching task assignments:', error);
+      return [];
+    }
+  }
+
+  static async getVolunteerTasks(volunteerId: number): Promise<Task[]> {
+    try {
+      const result = await db.select({
+        id: tasks.id,
+        event_id: tasks.event_id,
+        title: tasks.title,
+        description: tasks.description,
+        status: tasks.status,
+        created_at: tasks.created_at,
+        updated_at: tasks.updated_at,
+      })
+        .from(tasks)
+        .innerJoin(taskAssignments, eq(tasks.id, taskAssignments.task_id))
+        .where(eq(taskAssignments.volunteer_id, volunteerId))
+        .orderBy(tasks.created_at);
+
+      return result.map(task => ({
+        ...task,
+        event_id: task.event_id || 0,
+        description: task.description || undefined,
+        created_at: toISOString(task.created_at),
+        updated_at: toISOString(task.updated_at),
+      }));
+    } catch (error) {
+      console.error('Error fetching volunteer tasks:', error);
       return [];
     }
   }

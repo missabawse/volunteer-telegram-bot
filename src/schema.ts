@@ -2,18 +2,22 @@ import { pgTable, serial, text, integer, timestamp, index, pgEnum } from 'drizzl
 import { relations } from 'drizzle-orm';
 
 // Define enums
-export const volunteerStatusEnum = pgEnum('volunteer_status', ['probation', 'full', 'inactive']);
-export const eventFormatEnum = pgEnum('event_format', ['workshop', 'panel', 'online', 'in-person']);
-export const eventStatusEnum = pgEnum('event_status', ['planning', 'published']);
-export const eventRoleEnum = pgEnum('event_role', [
-  'date_confirmation',
-  'speaker_confirmation', 
-  'venue_confirmation',
-  'pre_event_marketing',
-  'post_event_marketing',
-  'moderator',
-  'facilitator'
+export const volunteerStatusEnum = pgEnum('volunteer_status', ['probation', 'full', 'lead']);
+export const eventFormatEnum = pgEnum('event_format', [
+  'moderated_discussion',
+  'conference', 
+  'talk',
+  'hangout',
+  'meeting',
+  'external_speaker',
+  'newsletter',
+  'social_media_takeover',
+  'workshop',
+  'panel',
+  'others'
 ]);
+export const eventStatusEnum = pgEnum('event_status', ['planning', 'published', 'completed', 'cancelled']);
+export const taskStatusEnum = pgEnum('task_status', ['todo', 'in_progress', 'complete']);
 
 // Volunteers table
 export const volunteers = pgTable('volunteers', {
@@ -37,24 +41,41 @@ export const events = pgTable('events', {
   date: timestamp('date', { withTimezone: true }).notNull(),
   format: eventFormatEnum('format').notNull(),
   status: eventStatusEnum('status').notNull().default('planning'),
+  venue: text('venue'),
   details: text('details'),
+  created_by: integer('created_by').references(() => volunteers.id, { onDelete: 'set null' }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
   dateIdx: index('idx_events_date').on(table.date),
   statusIdx: index('idx_events_status').on(table.status),
+  createdByIdx: index('idx_events_created_by').on(table.created_by),
 }));
 
-// Event roles table
-export const eventRoles = pgTable('event_roles', {
+// Tasks table (replaces event roles)
+export const tasks = pgTable('tasks', {
   id: serial('id').primaryKey(),
   event_id: integer('event_id').references(() => events.id, { onDelete: 'cascade' }),
-  role: eventRoleEnum('role').notNull(),
-  assigned_to: integer('assigned_to').references(() => volunteers.id, { onDelete: 'set null' }),
-  created_at: timestamp('created_at', { withTimezone: true }).defaultNow()
+  title: text('title').notNull(),
+  description: text('description'),
+  status: taskStatusEnum('status').notNull().default('todo'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow()
 }, (table) => ({
-  eventIdIdx: index('idx_event_roles_event_id').on(table.event_id),
-  assignedToIdx: index('idx_event_roles_assigned_to').on(table.assigned_to),
+  eventIdIdx: index('idx_tasks_event_id').on(table.event_id),
+  statusIdx: index('idx_tasks_status').on(table.status),
+}));
+
+// Task assignments table (many-to-many relationship)
+export const taskAssignments = pgTable('task_assignments', {
+  id: serial('id').primaryKey(),
+  task_id: integer('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
+  volunteer_id: integer('volunteer_id').references(() => volunteers.id, { onDelete: 'cascade' }),
+  assigned_by: integer('assigned_by').references(() => volunteers.id, { onDelete: 'set null' }),
+  assigned_at: timestamp('assigned_at', { withTimezone: true }).defaultNow()
+}, (table) => ({
+  taskIdIdx: index('idx_task_assignments_task_id').on(table.task_id),
+  volunteerIdIdx: index('idx_task_assignments_volunteer_id').on(table.volunteer_id),
 }));
 
 // Admins table
@@ -69,20 +90,37 @@ export const admins = pgTable('admins', {
 
 // Define relations
 export const volunteersRelations = relations(volunteers, ({ many }) => ({
-  eventRoles: many(eventRoles),
+  taskAssignments: many(taskAssignments),
+  createdEvents: many(events),
 }));
 
-export const eventsRelations = relations(events, ({ many }) => ({
-  eventRoles: many(eventRoles),
+export const eventsRelations = relations(events, ({ many, one }) => ({
+  tasks: many(tasks),
+  creator: one(volunteers, {
+    fields: [events.created_by],
+    references: [volunteers.id],
+  }),
 }));
 
-export const eventRolesRelations = relations(eventRoles, ({ one }) => ({
+export const tasksRelations = relations(tasks, ({ one, many }) => ({
   event: one(events, {
-    fields: [eventRoles.event_id],
+    fields: [tasks.event_id],
     references: [events.id],
   }),
+  assignments: many(taskAssignments),
+}));
+
+export const taskAssignmentsRelations = relations(taskAssignments, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskAssignments.task_id],
+    references: [tasks.id],
+  }),
   volunteer: one(volunteers, {
-    fields: [eventRoles.assigned_to],
+    fields: [taskAssignments.volunteer_id],
+    references: [volunteers.id],
+  }),
+  assignedBy: one(volunteers, {
+    fields: [taskAssignments.assigned_by],
     references: [volunteers.id],
   }),
 }));
@@ -92,7 +130,9 @@ export type Volunteer = typeof volunteers.$inferSelect;
 export type NewVolunteer = typeof volunteers.$inferInsert;
 export type Event = typeof events.$inferSelect;
 export type NewEvent = typeof events.$inferInsert;
-export type EventRole = typeof eventRoles.$inferSelect;
-export type NewEventRole = typeof eventRoles.$inferInsert;
+export type Task = typeof tasks.$inferSelect;
+export type NewTask = typeof tasks.$inferInsert;
+export type TaskAssignment = typeof taskAssignments.$inferSelect;
+export type NewTaskAssignment = typeof taskAssignments.$inferInsert;
 export type Admin = typeof admins.$inferSelect;
 export type NewAdmin = typeof admins.$inferInsert;

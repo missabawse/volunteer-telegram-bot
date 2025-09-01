@@ -8,7 +8,9 @@ dotenv.config();
 import { 
   onboardCommand, 
   myStatusCommand, 
-  commitCommand 
+  commitCommand,
+  assignTaskCommand,
+  updateTaskStatusCommand
 } from './commands/volunteers';
 
 import { 
@@ -17,7 +19,7 @@ import {
   listVolunteersCommand,
   addVolunteerCommand,
   removeVolunteerCommand,
-  assignRoleCommand
+  addVolunteerWithStatusCommand
 } from './commands/admins';
 
 import {
@@ -56,7 +58,7 @@ Welcome! I help manage volunteer onboarding, event planning, and admin tasks.
 **For Volunteers:**
 • \`/onboard\` - Learn about the volunteer program
 • \`/my_status\` - Check your volunteer status
-• \`/commit <event_id> <role>\` - Sign up for event roles
+• \`/commit <task_id>\` - Sign up for event tasks
 
 **For Admins:**
 • \`/admin_login <secret>\` - Authenticate as admin
@@ -64,7 +66,9 @@ Welcome! I help manage volunteer onboarding, event planning, and admin tasks.
 • \`/add_volunteer @handle "Name"\` - Add new volunteer
 • \`/remove_volunteer @handle\` - Remove volunteer
 • \`/create_event\` - Create new event (interactive)
-• \`/assign_role <event_id> <role> @volunteer\` - Assign roles
+• \`/assign_task <task_id> @volunteer\` - Assign tasks
+• \`/add_volunteer_with_status @handle "Name" <status>\` - Add volunteer with status
+• \`/update_task_status <task_id> <status>\` - Update task status
 • \`/finalize_event <event_id>\` - Publish event
 • \`/list_events\` - View all events
 • \`/event_details <event_id>\` - View event details
@@ -104,7 +108,9 @@ bot.command('admin_login', adminLoginCommand);
 bot.command('list_volunteers', requireAdmin, listVolunteersCommand);
 bot.command('add_volunteer', requireAdmin, addVolunteerCommand);
 bot.command('remove_volunteer', requireAdmin, removeVolunteerCommand);
-bot.command('assign_role', requireAdmin, assignRoleCommand);
+bot.command('assign_task', requireAdmin, assignTaskCommand);
+bot.command('add_volunteer_with_status', requireAdmin, addVolunteerWithStatusCommand);
+bot.command('update_task_status', updateTaskStatusCommand);
 bot.command('create_event', requireAdmin, createEventCommand);
 bot.command('finalize_event', requireAdmin, finalizeEventCommand);
 bot.command('list_events', requireAdmin, listEventsCommand);

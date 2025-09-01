@@ -1,53 +1,62 @@
 import { Bot } from 'grammy';
 import { DrizzleDatabaseService } from './db-drizzle';
 
-// Legacy compatible types
-interface Volunteer {
-  id: number;
-  name: string;
-  telegram_handle: string;
-  status: 'probation' | 'full' | 'inactive';
-  commitments: number;
-  probation_start_date: string;
-  created_at: string;
-  updated_at: string;
-}
+// Import types from the types module
+import type { Volunteer, Event, Task, TaskAssignment } from './types';
 
-interface Event {
-  id: number;
-  title: string;
-  date: string;
-  format: 'workshop' | 'panel' | 'online' | 'in-person';
-  status: 'planning' | 'published';
-  details?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface EventRole {
-  id: number;
-  event_id: number;
-  role: 'date_confirmation' | 'speaker_confirmation' | 'venue_confirmation' | 
-        'pre_event_marketing' | 'post_event_marketing' | 'moderator' | 'facilitator';
-  assigned_to?: number | null;
-  created_at: string;
-}
-
-// Role mapping based on event format
-export const getRequiredRoles = (format: Event['format']): EventRole['role'][] => {
-  const baseRoles: EventRole['role'][] = ['pre_event_marketing', 'post_event_marketing'];
+// Task templates based on event format
+export const getRequiredTasks = (format: Event['format']): { title: string; description: string }[] => {
+  const baseTasks = [
+    { title: 'Pre-event Marketing', description: 'Promote the event before it happens' },
+    { title: 'Post-event Marketing', description: 'Share highlights and follow-up after the event' }
+  ];
   
   switch (format) {
     case 'panel':
-      return [...baseRoles, 'moderator', 'date_confirmation', 'speaker_confirmation'];
+      return [
+        ...baseTasks,
+        { title: 'Moderation', description: 'Moderate the panel discussion' },
+        { title: 'Date Confirmation', description: 'Confirm the event date with all participants' },
+        { title: 'Speaker Confirmation', description: 'Confirm speakers and their topics' }
+      ];
     case 'workshop':
-      return [...baseRoles, 'facilitator', 'date_confirmation'];
-    case 'online':
-      return [...baseRoles, 'date_confirmation'];
-    case 'in-person':
-      return [...baseRoles, 'venue_confirmation', 'date_confirmation'];
+      return [
+        ...baseTasks,
+        { title: 'Facilitation', description: 'Facilitate the workshop activities' },
+        { title: 'Date Confirmation', description: 'Confirm the event date with all participants' }
+      ];
+    case 'conference':
+    case 'talk':
+    case 'external_speaker':
+      return [
+        ...baseTasks,
+        { title: 'Speaker Coordination', description: 'Coordinate with speakers and manage logistics' },
+        { title: 'Date Confirmation', description: 'Confirm the event date with all participants' }
+      ];
+    case 'meeting':
+    case 'hangout':
+      return [
+        ...baseTasks,
+        { title: 'Date Confirmation', description: 'Confirm the event date with all participants' }
+      ];
+    case 'moderated_discussion':
+      return [
+        ...baseTasks,
+        { title: 'Moderation', description: 'Moderate the discussion' },
+        { title: 'Topic Preparation', description: 'Prepare discussion topics and questions' }
+      ];
+    case 'newsletter':
+      return [
+        { title: 'Content Creation', description: 'Create newsletter content' },
+        { title: 'Review and Editing', description: 'Review and edit the newsletter before publishing' }
+      ];
+    case 'social_media_takeover':
+      return [
+        { title: 'Content Planning', description: 'Plan social media content for the takeover' },
+        { title: 'Content Creation', description: 'Create posts, stories, and other content' }
+      ];
     default:
-      return baseRoles;
+      return baseTasks;
   }
 };
 
@@ -102,22 +111,25 @@ export const formatVolunteerStatus = (volunteer: Volunteer): string => {
 };
 
 // Format event details for display
-export const formatEventDetails = (event: Event, roles?: EventRole[]): string => {
+export const formatEventDetails = (event: Event, tasks?: Task[]): string => {
   let eventText = `**${event.title}**\n`;
   eventText += `Date: ${new Date(event.date).toLocaleDateString()}\n`;
-  eventText += `Format: ${event.format}\n`;
-  eventText += `Status: ${event.status}\n`;
+  eventText += `Format: ${event.format.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}\n`;
+  eventText += `Status: ${event.status.replace(/\b\w/g, l => l.toUpperCase())}\n`;
+  
+  if (event.venue) {
+    eventText += `Venue: ${event.venue}\n`;
+  }
   
   if (event.details) {
     eventText += `Details: ${event.details}\n`;
   }
   
-  if (roles && roles.length > 0) {
-    eventText += `\n**Roles:**\n`;
-    roles.forEach(role => {
-      const roleDisplay = role.role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const assignedText = role.assigned_to ? '✅ Assigned' : '❌ Open';
-      eventText += `• ${roleDisplay}: ${assignedText}\n`;
+  if (tasks && tasks.length > 0) {
+    eventText += `\n**Tasks:**\n`;
+    tasks.forEach(task => {
+      const statusIcon = task.status === 'complete' ? '✅' : task.status === 'in_progress' ? '🔄' : '❌';
+      eventText += `• ${task.title}: ${statusIcon} ${task.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}\n`;
     });
   }
   
@@ -201,33 +213,24 @@ export const parseDate = (dateInput: string): Date | null => {
   return parsedDate;
 };
 
-// Format role name for display
-export const formatRoleName = (role: EventRole['role']): string => {
-  return role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+// Format task status for display
+export const formatTaskStatus = (status: Task['status']): string => {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 
-// Check if volunteer can commit to a role
-export const canVolunteerCommit = async (volunteerId: number, eventId: number, role: EventRole['role']): Promise<{
+// Check if volunteer can commit to a task
+export const canVolunteerCommit = async (volunteerId: number, taskId: number): Promise<{
   canCommit: boolean;
   reason?: string;
 }> => {
-  // Check if role is already assigned
-  const roles = await DrizzleDatabaseService.getEventRoles(eventId);
-  const existingRole = roles.find((r: any) => r.role === role);
+  // Check if volunteer is already assigned to this task
+  const assignments = await DrizzleDatabaseService.getTaskAssignments(taskId);
+  const existingAssignment = assignments.find(a => a.volunteer_id === volunteerId);
   
-  if (existingRole?.assigned_to) {
+  if (existingAssignment) {
     return {
       canCommit: false,
-      reason: 'This role is already assigned to another volunteer'
-    };
-  }
-  
-  // Check if volunteer is already assigned to this event
-  const volunteerRoles = roles.filter((r: any) => r.assigned_to === volunteerId);
-  if (volunteerRoles.length > 0) {
-    return {
-      canCommit: false,
-      reason: 'You are already assigned to a role in this event'
+      reason: 'You are already assigned to this task'
     };
   }
   
@@ -258,7 +261,9 @@ export const markInactiveVolunteers = async (): Promise<void> => {
   
   for (const volunteer of volunteers) {
     if (volunteer.status === 'full' && checkInactiveStatus(volunteer)) {
-      await DrizzleDatabaseService.updateVolunteerStatus(volunteer.id, 'inactive');
+      // Note: 'inactive' status removed from new schema, volunteers are now either probation, full, or lead
+      // Consider implementing a different approach for inactive volunteers
+      console.log(`Volunteer ${volunteer.name} appears inactive but no inactive status available`);
     }
   }
 };

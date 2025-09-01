@@ -2,10 +2,10 @@ import { Context, CommandContext } from 'grammy';
 import { DrizzleDatabaseService } from '../db-drizzle';
 import { Event } from '../types';
 import { 
-  getRequiredRoles, 
+  getRequiredTasks, 
   parseDate, 
   formatEventDetails,
-  formatRoleName
+  formatTaskStatus
 } from '../utils';
 
 // Store conversation state for interactive wizard
@@ -70,26 +70,46 @@ export const handleEventWizard = async (ctx: Context) => {
         'Please choose one:\n' +
         '• **workshop** - Interactive learning session\n' +
         '• **panel** - Discussion with multiple speakers\n' +
-        '• **online** - Virtual event\n' +
-        '• **in-person** - Physical location event\n\n' +
+        '• **conference** - Large-scale conference\n' +
+        '• **talk** - Single speaker presentation\n' +
+        '• **hangout** - Casual social gathering\n' +
+        '• **meeting** - Formal meeting\n' +
+        '• **external_speaker** - Event with external speaker\n' +
+        '• **newsletter** - Newsletter content creation\n' +
+        '• **social_media_takeover** - Social media content\n' +
+        '• **moderated_discussion** - Facilitated discussion\n' +
+        '• **others** - Other event type\n\n' +
         'Type the format name (e.g., "workshop")',
         { parse_mode: 'Markdown' }
       );
       break;
 
     case 'format':
-      const format = text.toLowerCase() as Event['format'];
-      const validFormats = ['workshop', 'panel', 'online', 'in-person'];
+      const format = text.toLowerCase().replace(/\s+/g, '_') as Event['format'];
+      const validFormats = ['workshop', 'panel', 'conference', 'talk', 'hangout', 'meeting', 
+                           'external_speaker', 'newsletter', 'social_media_takeover', 
+                           'moderated_discussion', 'others'];
       
       if (!validFormats.includes(format)) {
-        await ctx.reply('❌ Invalid format. Please choose: workshop, panel, online, or in-person');
+        await ctx.reply('❌ Invalid format. Please choose from the available options.');
         return;
       }
       
       state.format = format;
+      state.step = 'venue';
+      await ctx.reply(
+        '**Step 4/5:** What is the venue for this event?\n\n' +
+        'You can provide a venue name/address, or type "TBD" if not confirmed yet, or "skip" for online events.',
+        { parse_mode: 'Markdown' }
+      );
+      break;
+
+    case 'venue':
+      const venue = text.toLowerCase() === 'skip' ? null : (text.toLowerCase() === 'tbd' ? 'TBD' : text);
+      state.venue = venue;
       state.step = 'details';
       await ctx.reply(
-        '**Step 4/4:** Any additional details about the event?\n\n' +
+        '**Step 5/5:** Any additional details about the event?\n\n' +
         'You can provide a description, special requirements, or type "skip" to finish without details.',
         { parse_mode: 'Markdown' }
       );
@@ -103,7 +123,9 @@ export const handleEventWizard = async (ctx: Context) => {
         state.title,
         state.date,
         state.format,
-        details
+        details,
+        state.venue,
+        userId
       );
       
       if (!event) {
@@ -112,24 +134,28 @@ export const handleEventWizard = async (ctx: Context) => {
         return;
       }
 
-      // Create required roles for the event
-      const requiredRoles = getRequiredRoles(state.format);
+      // Create required tasks for the event
+      const requiredTasks = getRequiredTasks(state.format);
+      const createdTasks = [];
       
-      for (const role of requiredRoles) {
-        await DrizzleDatabaseService.createEventRole(event.id, role);
+      for (const taskTemplate of requiredTasks) {
+        const task = await DrizzleDatabaseService.createTask(
+          event.id,
+          taskTemplate.title,
+          taskTemplate.description
+        );
+        if (task) {
+          createdTasks.push(task);
+        }
       }
 
       // Clear conversation state
       conversationState.delete(userId);
       
       let successMessage = `✅ **Event created successfully!**\n\n`;
-      successMessage += formatEventDetails(event);
-      successMessage += `\n**Required roles created:**\n`;
-      requiredRoles.forEach(role => {
-        successMessage += `• ${formatRoleName(role)}\n`;
-      });
+      successMessage += formatEventDetails(event, createdTasks);
       successMessage += `\nEvent ID: **${event.id}**\n`;
-      successMessage += `Use \`/assign_role ${event.id} <role> @volunteer\` to assign volunteers.`;
+      successMessage += `Use \`/assign_task <task_id> @volunteer\` to assign volunteers to tasks.`;
       
       await ctx.reply(successMessage, { parse_mode: 'Markdown' });
       break;
@@ -169,14 +195,14 @@ export const finalizeEventCommand = async (ctx: CommandContext<Context>) => {
     return;
   }
 
-  // Get event roles to check completion
-  const roles = await DrizzleDatabaseService.getEventRoles(eventId);
-  const unassignedRoles = roles.filter(role => !role.assigned_to);
+  // Get event tasks to check completion
+  const tasks = await DrizzleDatabaseService.getEventTasks(eventId);
+  const incompleteTasks = tasks.filter(task => task.status !== 'complete');
   
-  if (unassignedRoles.length > 0) {
-    let warningMessage = '⚠️ **Warning:** The following roles are still unassigned:\n\n';
-    unassignedRoles.forEach(role => {
-      warningMessage += `• ${formatRoleName(role.role)}\n`;
+  if (incompleteTasks.length > 0) {
+    let warningMessage = '⚠️ **Warning:** The following tasks are still incomplete:\n\n';
+    incompleteTasks.forEach(task => {
+      warningMessage += `• ${task.title} (${formatTaskStatus(task.status)})\n`;
     });
     warningMessage += '\nAre you sure you want to finalize this event? Reply with "yes" to confirm or "no" to cancel.';
     
@@ -257,14 +283,17 @@ export const listEventsCommand = async (ctx: CommandContext<Context>) => {
   if (planningEvents.length > 0) {
     message += '**🟡 Planning Events:**\n';
     for (const event of planningEvents) {
-      const roles = await DrizzleDatabaseService.getEventRoles(event.id);
-      const assignedCount = roles.filter(r => r.assigned_to).length;
-      const totalCount = roles.length;
+      const tasks = await DrizzleDatabaseService.getEventTasks(event.id);
+      const completedCount = tasks.filter(t => t.status === 'complete').length;
+      const totalCount = tasks.length;
       
       message += `• **${event.title}** (ID: ${event.id})\n`;
       message += `  📅 ${new Date(event.date).toLocaleDateString()}\n`;
-      message += `  📍 ${event.format}\n`;
-      message += `  👥 Roles: ${assignedCount}/${totalCount} assigned\n\n`;
+      message += `  📍 ${event.format.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}\n`;
+      if (event.venue) {
+        message += `  🏢 ${event.venue}\n`;
+      }
+      message += `  ✅ Tasks: ${completedCount}/${totalCount} completed\n\n`;
     }
   }
 
@@ -307,8 +336,8 @@ export const eventDetailsCommand = async (ctx: CommandContext<Context>) => {
     return;
   }
 
-  const roles = await DrizzleDatabaseService.getEventRoles(eventId);
-  const eventDetails = formatEventDetails(event, roles);
+  const tasks = await DrizzleDatabaseService.getEventTasks(eventId);
+  const eventDetails = formatEventDetails(event, tasks);
   
   await ctx.reply(`📅 **Event Details:**\n\n${eventDetails}`, { parse_mode: 'Markdown' });
 };

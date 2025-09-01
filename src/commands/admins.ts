@@ -3,9 +3,6 @@ import { DrizzleDatabaseService } from '../db-drizzle';
 import { 
   formatVolunteerStatus, 
   validateTelegramHandle,
-  formatRoleName,
-  canVolunteerCommit,
-  checkAndPromoteVolunteers
 } from '../utils';
 
 // Admin authentication middleware
@@ -81,7 +78,7 @@ export const listVolunteersCommand = async (ctx: CommandContext<Context>) => {
   // Group volunteers by status
   const probationVolunteers = volunteers.filter(v => v.status === 'probation');
   const fullVolunteers = volunteers.filter(v => v.status === 'full');
-  const inactiveVolunteers = volunteers.filter(v => v.status === 'inactive');
+  const leadVolunteers = volunteers.filter(v => v.status === 'lead');
 
   if (probationVolunteers.length > 0) {
     message += '**🟡 Probation Volunteers:**\n';
@@ -99,9 +96,9 @@ export const listVolunteersCommand = async (ctx: CommandContext<Context>) => {
     message += '\n';
   }
 
-  if (inactiveVolunteers.length > 0) {
-    message += '**🔴 Inactive Volunteers:**\n';
-    inactiveVolunteers.forEach(volunteer => {
+  if (leadVolunteers.length > 0) {
+    message += '**⭐ Lead Volunteers:**\n';
+    leadVolunteers.forEach(volunteer => {
       message += `• ${volunteer.name} (@${volunteer.telegram_handle}) - ${volunteer.commitments} commitments\n`;
     });
   }
@@ -206,89 +203,62 @@ export const removeVolunteerCommand = async (ctx: CommandContext<Context>) => {
   }
 };
 
-// /assign_role command - assign volunteer to role
-export const assignRoleCommand = async (ctx: CommandContext<Context>) => {
+// /add_volunteer_with_status command - manually add a volunteer with specific status
+export const addVolunteerWithStatusCommand = async (ctx: CommandContext<Context>) => {
   const args = ctx.match?.toString().trim().split(' ');
   
   if (!args || args.length < 3) {
     await ctx.reply(
-      '❌ **Usage:** `/assign_role <event_id> <role> @volunteer`\n\n' +
-      '**Example:** `/assign_role 1 moderator @johndoe`',
+      '❌ **Usage:** `/add_volunteer_with_status @handle "Full Name" <status>`\n\n' +
+      '**Available statuses:** probation, full, lead\n\n' +
+      '**Example:** `/add_volunteer_with_status @johndoe "John Doe" full`',
       { parse_mode: 'Markdown' }
     );
     return;
   }
 
-  const eventId = parseInt(args[0] || '');
-  const role = args[1] as any;
-  const handleInput = args[2];
+  const handleInput = args[0];
+  const status = args[args.length - 1] as 'probation' | 'full' | 'lead';
+  const name = args.slice(1, -1).join(' ').replace(/"/g, ''); // Remove quotes if present
 
-  // Validate inputs
-  if (isNaN(eventId)) {
-    await ctx.reply('❌ Invalid event ID.');
+  // Validate status
+  const validStatuses = ['probation', 'full', 'lead'];
+  if (!validStatuses.includes(status)) {
+    await ctx.reply('❌ Invalid status. Use: probation, full, or lead');
     return;
   }
 
+  // Validate telegram handle
   const telegramHandle: string | null = validateTelegramHandle(handleInput || '');
-  if (!telegramHandle) {
-    await ctx.reply('❌ Invalid Telegram handle format.');
-    return;
-  }
-
-  // Validate role
-  const validRoles = [
-    'date_confirmation',
-    'speaker_confirmation', 
-    'venue_confirmation',
-    'pre_event_marketing',
-    'post_event_marketing',
-    'moderator',
-    'facilitator'
-  ];
-
-  if (!validRoles.includes(role)) {
-    await ctx.reply(`❌ Invalid role. Available roles: ${validRoles.join(', ')}`);
-    return;
-  }
-
-  // Check if event exists
-  const event = await DrizzleDatabaseService.getEvent(eventId);
-  if (!event) {
-    await ctx.reply('❌ Event not found.');
-    return;
-  }
-
-  // Check if volunteer exists
-  const volunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
-  if (!volunteer) {
-    await ctx.reply(`❌ Volunteer @${telegramHandle} not found.`);
-    return;
-  }
-
-  // Check if volunteer can be assigned
-  const { canCommit, reason } = await canVolunteerCommit(volunteer.id, eventId, role);
-  if (!canCommit) {
-    await ctx.reply(`❌ ${reason}`);
-    return;
-  }
-
-  // Assign role
-  const success = await DrizzleDatabaseService.assignVolunteerToRole(eventId, role, volunteer.id);
   
-  if (success) {
-    // Increment commitments
-    await DrizzleDatabaseService.incrementVolunteerCommitments(volunteer.id);
-    
-    const roleDisplay = formatRoleName(role);
+  if (!telegramHandle) {
+    await ctx.reply('❌ Invalid Telegram handle format. Handle should be 5-32 characters, alphanumeric and underscores only.');
+    return;
+  }
+
+  if (!name || name.length < 2) {
+    await ctx.reply('❌ Please provide a valid name (at least 2 characters).');
+    return;
+  }
+
+  // Check if volunteer already exists
+  const existingVolunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
+  
+  if (existingVolunteer) {
+    await ctx.reply(`❌ Volunteer @${telegramHandle} is already registered.`);
+    return;
+  }
+
+  // Create new volunteer with specified status
+  const newVolunteer = await DrizzleDatabaseService.createVolunteerWithStatus(name, telegramHandle, status);
+  
+  if (newVolunteer) {
     await ctx.reply(
-      `✅ **Role assigned successfully!**\n\n` +
-      `${volunteer.name} (@${volunteer.telegram_handle}) is now assigned as **${roleDisplay}** for "${event.title}".`,
+      `✅ **Volunteer added successfully!**\n\n` +
+      formatVolunteerStatus(newVolunteer),
       { parse_mode: 'Markdown' }
     );
-
-    // Check for promotion
-    await checkAndPromoteVolunteers(ctx.api as any);
   } else {
-    await ctx.reply('❌ Failed to assign role. Please try again.');
+    await ctx.reply('❌ Failed to add volunteer. Please try again.');
   }
 };
