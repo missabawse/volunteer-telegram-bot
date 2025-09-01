@@ -1,6 +1,6 @@
 # Telegram Volunteer Management Bot
 
-A comprehensive Telegram bot built with grammY and Supabase for managing volunteer onboarding, probation tracking, event planning, and admin management.
+A comprehensive Telegram bot built with grammY and Drizzle ORM for managing volunteer onboarding, probation tracking, event planning, and admin management.
 
 ## Features
 
@@ -27,7 +27,7 @@ A comprehensive Telegram bot built with grammY and Supabase for managing volunte
 ### 1. Prerequisites
 - Node.js 18+ 
 - Telegram Bot Token (from @BotFather)
-- Supabase account and project
+- PostgreSQL database (Supabase, Neon, or local)
 
 ### 2. Installation
 
@@ -47,9 +47,8 @@ Edit `.env` file with your credentials:
 # Get from @BotFather on Telegram
 BOT_TOKEN=your_telegram_bot_token_here
 
-# From your Supabase project settings
-SUPABASE_URL=your_supabase_project_url
-SUPABASE_ANON_KEY=your_supabase_anon_key
+# PostgreSQL database connection string
+DATABASE_URL=postgresql://username:password@host:port/database
 
 # Set a secure password for admin authentication
 ADMIN_SECRET=your_admin_secret_password
@@ -60,10 +59,17 @@ VOLUNTEER_CHANNEL_ID=your_volunteer_channel_id
 
 ### 4. Database Setup
 
-1. Go to your Supabase project dashboard
-2. Navigate to the SQL Editor
-3. Copy and paste the contents of `supabase_schema.sql`
-4. Execute the SQL to create all tables and indexes
+```bash
+# Generate and run migrations
+npm run db:generate
+npm run db:migrate
+
+# Or push schema directly to database
+npm run db:push
+
+# Optional: Open Drizzle Studio to view your database
+npm run db:studio
+```
 
 ### 5. Running the Bot
 
@@ -148,7 +154,7 @@ The bot uses 4 main tables:
 - **event_roles** - Role assignments for events
 - **admins** - Admin authentication and permissions
 
-See `supabase_schema.sql` for complete schema details.
+See `src/schema.ts` for complete schema details and Drizzle table definitions.
 
 ## Development
 
@@ -156,7 +162,11 @@ See `supabase_schema.sql` for complete schema details.
 ```
 src/
 ├── bot.ts              # Main bot entry point
-├── db.ts               # Supabase client and database operations
+├── db-drizzle.ts       # Drizzle ORM database operations
+├── schema.ts           # Database schema definitions
+├── types.ts            # Type definitions and converters
+├── drizzle.ts          # Database connection setup
+├── migrate.ts          # Database migration runner
 ├── utils.ts            # Helper functions and utilities
 └── commands/
     ├── volunteers.ts   # Volunteer-related commands
@@ -184,9 +194,10 @@ The bot automatically runs maintenance tasks every hour:
 ## Security Notes
 
 - Admin secret should be kept secure and shared only with trusted admins
-- Supabase RLS (Row Level Security) can be configured for additional protection
+- Database credentials should be kept secure and never committed to version control
 - Bot token should never be committed to version control
+- Use environment variables for all sensitive configuration
 
 ## Support
 
-For issues or feature requests, please check the bot logs and Supabase dashboard for debugging information.
+For issues or feature requests, please check the bot logs and use Drizzle Studio for database debugging information.

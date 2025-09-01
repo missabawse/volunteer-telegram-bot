@@ -1,5 +1,6 @@
 import { Context, CommandContext } from 'grammy';
-import { DatabaseService, Event, supabase } from '../db';
+import { DrizzleDatabaseService } from '../db-drizzle';
+import { Event } from '../types';
 import { 
   getRequiredRoles, 
   parseDate, 
@@ -98,7 +99,7 @@ export const handleEventWizard = async (ctx: Context) => {
       const details = text.toLowerCase() === 'skip' ? undefined : text;
       
       // Create the event
-      const event = await DatabaseService.createEvent(
+      const event = await DrizzleDatabaseService.createEvent(
         state.title,
         state.date,
         state.format,
@@ -115,7 +116,7 @@ export const handleEventWizard = async (ctx: Context) => {
       const requiredRoles = getRequiredRoles(state.format);
       
       for (const role of requiredRoles) {
-        await DatabaseService.createEventRole(event.id, role);
+        await DrizzleDatabaseService.createEventRole(event.id, role);
       }
 
       // Clear conversation state
@@ -156,7 +157,7 @@ export const finalizeEventCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Check if event exists
-  const event = await DatabaseService.getEvent(eventId);
+  const event = await DrizzleDatabaseService.getEvent(eventId);
   
   if (!event) {
     await ctx.reply('❌ Event not found.');
@@ -169,7 +170,7 @@ export const finalizeEventCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Get event roles to check completion
-  const roles = await DatabaseService.getEventRoles(eventId);
+  const roles = await DrizzleDatabaseService.getEventRoles(eventId);
   const unassignedRoles = roles.filter(role => !role.assigned_to);
   
   if (unassignedRoles.length > 0) {
@@ -206,7 +207,7 @@ export const handleFinalizationConfirmation = async (ctx: Context) => {
   
   if (state.step === 'confirm_finalize') {
     if (text === 'yes') {
-      const event = await DatabaseService.getEvent(state.eventId);
+      const event = await DrizzleDatabaseService.getEvent(state.eventId);
       if (event) {
         await finalizeEvent(ctx, state.eventId, event);
       }
@@ -223,7 +224,7 @@ export const handleFinalizationConfirmation = async (ctx: Context) => {
 
 // Helper function to finalize event
 const finalizeEvent = async (ctx: Context, eventId: number, event: Event) => {
-  const success = await DatabaseService.updateEventStatus(eventId, 'published');
+  const success = await DrizzleDatabaseService.updateEventStatus(eventId, 'published');
   
   if (success) {
     await ctx.reply(
@@ -241,15 +242,7 @@ const finalizeEvent = async (ctx: Context, eventId: number, event: Event) => {
 
 // /list_events command - list all events
 export const listEventsCommand = async (ctx: CommandContext<Context>) => {
-  const { data: events, error } = await supabase
-    .from('events')
-    .select('*')
-    .order('date', { ascending: true });
-
-  if (error) {
-    await ctx.reply('❌ Failed to fetch events.');
-    return;
-  }
+  const events = await DrizzleDatabaseService.getAllEvents();
 
   if (!events || events.length === 0) {
     await ctx.reply('📅 No events found.');
@@ -264,7 +257,7 @@ export const listEventsCommand = async (ctx: CommandContext<Context>) => {
   if (planningEvents.length > 0) {
     message += '**🟡 Planning Events:**\n';
     for (const event of planningEvents) {
-      const roles = await DatabaseService.getEventRoles(event.id);
+      const roles = await DrizzleDatabaseService.getEventRoles(event.id);
       const assignedCount = roles.filter(r => r.assigned_to).length;
       const totalCount = roles.length;
       
@@ -307,14 +300,14 @@ export const eventDetailsCommand = async (ctx: CommandContext<Context>) => {
     return;
   }
 
-  const event = await DatabaseService.getEvent(eventId);
+  const event = await DrizzleDatabaseService.getEvent(eventId);
   
   if (!event) {
     await ctx.reply('❌ Event not found.');
     return;
   }
 
-  const roles = await DatabaseService.getEventRoles(eventId);
+  const roles = await DrizzleDatabaseService.getEventRoles(eventId);
   const eventDetails = formatEventDetails(event, roles);
   
   await ctx.reply(`📅 **Event Details:**\n\n${eventDetails}`, { parse_mode: 'Markdown' });

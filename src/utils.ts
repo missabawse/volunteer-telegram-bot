@@ -1,5 +1,37 @@
 import { Bot } from 'grammy';
-import { DatabaseService, Volunteer, Event, EventRole } from './db';
+import { DrizzleDatabaseService } from './db-drizzle';
+
+// Legacy compatible types
+interface Volunteer {
+  id: number;
+  name: string;
+  telegram_handle: string;
+  status: 'probation' | 'full' | 'inactive';
+  commitments: number;
+  probation_start_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Event {
+  id: number;
+  title: string;
+  date: string;
+  format: 'workshop' | 'panel' | 'online' | 'in-person';
+  status: 'planning' | 'published';
+  details?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface EventRole {
+  id: number;
+  event_id: number;
+  role: 'date_confirmation' | 'speaker_confirmation' | 'venue_confirmation' | 
+        'pre_event_marketing' | 'post_event_marketing' | 'moderator' | 'facilitator';
+  assigned_to?: number | null;
+  created_at: string;
+}
 
 // Role mapping based on event format
 export const getRequiredRoles = (format: Event['format']): EventRole['role'][] => {
@@ -180,8 +212,8 @@ export const canVolunteerCommit = async (volunteerId: number, eventId: number, r
   reason?: string;
 }> => {
   // Check if role is already assigned
-  const roles = await DatabaseService.getEventRoles(eventId);
-  const existingRole = roles.find(r => r.role === role);
+  const roles = await DrizzleDatabaseService.getEventRoles(eventId);
+  const existingRole = roles.find((r: any) => r.role === role);
   
   if (existingRole?.assigned_to) {
     return {
@@ -191,7 +223,7 @@ export const canVolunteerCommit = async (volunteerId: number, eventId: number, r
   }
   
   // Check if volunteer is already assigned to this event
-  const volunteerRoles = roles.filter(r => r.assigned_to === volunteerId);
+  const volunteerRoles = roles.filter((r: any) => r.assigned_to === volunteerId);
   if (volunteerRoles.length > 0) {
     return {
       canCommit: false,
@@ -204,14 +236,14 @@ export const canVolunteerCommit = async (volunteerId: number, eventId: number, r
 
 // Auto-promote volunteers who meet criteria
 export const checkAndPromoteVolunteers = async (bot: Bot): Promise<void> => {
-  const volunteers = await DatabaseService.getAllVolunteers();
+  const volunteers = await DrizzleDatabaseService.getAllVolunteers();
   
   for (const volunteer of volunteers) {
     if (volunteer.status === 'probation') {
       const { isEligible } = checkProbationStatus(volunteer);
       
       if (isEligible) {
-        const success = await DatabaseService.updateVolunteerStatus(volunteer.id, 'full');
+        const success = await DrizzleDatabaseService.updateVolunteerStatus(volunteer.id, 'full');
         if (success) {
           await sendPromotionBroadcast(bot, { ...volunteer, status: 'full' });
         }
@@ -222,11 +254,11 @@ export const checkAndPromoteVolunteers = async (bot: Bot): Promise<void> => {
 
 // Mark inactive volunteers
 export const markInactiveVolunteers = async (): Promise<void> => {
-  const volunteers = await DatabaseService.getAllVolunteers();
+  const volunteers = await DrizzleDatabaseService.getAllVolunteers();
   
   for (const volunteer of volunteers) {
     if (volunteer.status === 'full' && checkInactiveStatus(volunteer)) {
-      await DatabaseService.updateVolunteerStatus(volunteer.id, 'inactive');
+      await DrizzleDatabaseService.updateVolunteerStatus(volunteer.id, 'inactive');
     }
   }
 };

@@ -1,26 +1,40 @@
 {
   "name": "volunteer-management-bot",
   "version": "1.0.0",
-  "description": "Telegram bot for volunteer management using grammY and Supabase",
+  "description": "Telegram bot for volunteer management using grammY and Drizzle ORM",
   "main": "dist/bot.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/bot.js",
     "dev": "ts-node src/bot.ts",
     "watch": "tsc --watch",
-    "type-check": "tsc -p tsconfig.json --noEmit"
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "ts-node src/migrate.ts",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:introspect": "ts-node scripts/introspect-db.ts"
   },
-  "keywords": ["telegram", "bot", "grammy", "supabase", "volunteer", "management"],
+  "keywords": [
+    "telegram",
+    "bot",
+    "grammy",
+    "drizzle",
+    "volunteer",
+    "management"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "dotenv": "^16.3.1",
+    "drizzle-kit": "^0.31.4",
+    "drizzle-orm": "^0.44.5",
     "grammy": "^1.19.2",
-    "@supabase/supabase-js": "^2.38.4",
-    "dotenv": "^16.3.1"
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@types/node": "^20.8.10",
-    "typescript": "^5.2.2",
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
   }
 }

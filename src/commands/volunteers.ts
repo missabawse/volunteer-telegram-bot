@@ -1,5 +1,5 @@
 import { Context, CommandContext } from 'grammy';
-import { DatabaseService } from '../db';
+import { DrizzleDatabaseService } from '../db-drizzle';
 import { 
   formatVolunteerStatus, 
   validateTelegramHandle, 
@@ -44,7 +44,7 @@ export const myStatusCommand = async (ctx: CommandContext<Context>) => {
     return;
   }
 
-  const volunteer = await DatabaseService.getVolunteerByHandle(telegramHandle);
+  const volunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
   
   if (!volunteer) {
     await ctx.reply(
@@ -113,7 +113,7 @@ export const commitCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Check if volunteer exists
-  const volunteer = await DatabaseService.getVolunteerByHandle(telegramHandle);
+  const volunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
   
   if (!volunteer) {
     await ctx.reply('❌ You need to be registered as a volunteer first. Contact an admin to get started.');
@@ -127,7 +127,7 @@ export const commitCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Check if event exists
-  const event = await DatabaseService.getEvent(eventId);
+  const event = await DrizzleDatabaseService.getEvent(eventId);
   
   if (!event) {
     await ctx.reply('❌ Event not found. Please check the event ID.');
@@ -143,7 +143,7 @@ export const commitCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Assign volunteer to role
-  const success = await DatabaseService.assignVolunteerToRole(eventId, role, volunteer.id);
+  const success = await DrizzleDatabaseService.assignVolunteerToRole(eventId, role, volunteer.id);
   
   if (!success) {
     await ctx.reply('❌ Failed to assign role. Please try again later.');
@@ -151,10 +151,10 @@ export const commitCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Increment volunteer commitments
-  await DatabaseService.incrementVolunteerCommitments(volunteer.id);
+  await DrizzleDatabaseService.incrementVolunteerCommitments(volunteer.id);
 
   // Check for promotion after commitment
-  const updatedVolunteer = await DatabaseService.getVolunteerByHandle(telegramHandle);
+  const updatedVolunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
   if (updatedVolunteer) {
     await checkAndPromoteVolunteers(ctx.api as any);
   }

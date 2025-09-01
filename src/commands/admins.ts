@@ -1,5 +1,5 @@
 import { Context, CommandContext } from 'grammy';
-import { DatabaseService } from '../db';
+import { DrizzleDatabaseService } from '../db-drizzle';
 import { 
   formatVolunteerStatus, 
   validateTelegramHandle,
@@ -17,7 +17,7 @@ export const requireAdmin = async (ctx: CommandContext<Context>, next: () => Pro
     return;
   }
 
-  const isAdmin = await DatabaseService.isAdmin(telegramHandle);
+  const isAdmin = await DrizzleDatabaseService.isAdmin(telegramHandle);
   
   if (!isAdmin) {
     await ctx.reply('❌ You are not authorized to use admin commands.');
@@ -50,7 +50,7 @@ export const adminLoginCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Check if already admin
-  const isAlreadyAdmin = await DatabaseService.isAdmin(telegramHandle);
+  const isAlreadyAdmin = await DrizzleDatabaseService.isAdmin(telegramHandle);
   
   if (isAlreadyAdmin) {
     await ctx.reply('✅ You are already registered as an admin.');
@@ -58,7 +58,7 @@ export const adminLoginCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Add as admin
-  const success = await DatabaseService.addAdmin(telegramHandle);
+  const success = await DrizzleDatabaseService.addAdmin(telegramHandle);
   
   if (success) {
     await ctx.reply('✅ **Admin access granted!** You can now use admin commands.', { parse_mode: 'Markdown' });
@@ -69,7 +69,7 @@ export const adminLoginCommand = async (ctx: CommandContext<Context>) => {
 
 // /list_volunteers command - list all volunteers with their status
 export const listVolunteersCommand = async (ctx: CommandContext<Context>) => {
-  const volunteers = await DatabaseService.getAllVolunteers();
+  const volunteers = await DrizzleDatabaseService.getAllVolunteers();
   
   if (volunteers.length === 0) {
     await ctx.reply('📋 No volunteers registered yet.');
@@ -139,7 +139,7 @@ export const addVolunteerCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Check if volunteer already exists
-  const existingVolunteer = await DatabaseService.getVolunteerByHandle(telegramHandle);
+  const existingVolunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
   
   if (existingVolunteer) {
     await ctx.reply(`❌ Volunteer @${telegramHandle} is already registered.`);
@@ -147,7 +147,7 @@ export const addVolunteerCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Create new volunteer
-  const newVolunteer = await DatabaseService.createVolunteer(name, telegramHandle);
+  const newVolunteer = await DrizzleDatabaseService.createVolunteer(name, telegramHandle);
   
   if (newVolunteer) {
     await ctx.reply(
@@ -185,7 +185,7 @@ export const removeVolunteerCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Check if volunteer exists
-  const volunteer = await DatabaseService.getVolunteerByHandle(telegramHandle);
+  const volunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
   
   if (!volunteer) {
     await ctx.reply(`❌ Volunteer @${telegramHandle} not found.`);
@@ -193,7 +193,7 @@ export const removeVolunteerCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Remove volunteer
-  const success = await DatabaseService.removeVolunteer(telegramHandle);
+  const success = await DrizzleDatabaseService.removeVolunteer(telegramHandle);
   
   if (success) {
     await ctx.reply(
@@ -252,14 +252,14 @@ export const assignRoleCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Check if event exists
-  const event = await DatabaseService.getEvent(eventId);
+  const event = await DrizzleDatabaseService.getEvent(eventId);
   if (!event) {
     await ctx.reply('❌ Event not found.');
     return;
   }
 
   // Check if volunteer exists
-  const volunteer = await DatabaseService.getVolunteerByHandle(telegramHandle);
+  const volunteer = await DrizzleDatabaseService.getVolunteerByHandle(telegramHandle);
   if (!volunteer) {
     await ctx.reply(`❌ Volunteer @${telegramHandle} not found.`);
     return;
@@ -273,11 +273,11 @@ export const assignRoleCommand = async (ctx: CommandContext<Context>) => {
   }
 
   // Assign role
-  const success = await DatabaseService.assignVolunteerToRole(eventId, role, volunteer.id);
+  const success = await DrizzleDatabaseService.assignVolunteerToRole(eventId, role, volunteer.id);
   
   if (success) {
     // Increment commitments
-    await DatabaseService.incrementVolunteerCommitments(volunteer.id);
+    await DrizzleDatabaseService.incrementVolunteerCommitments(volunteer.id);
     
     const roleDisplay = formatRoleName(role);
     await ctx.reply(
