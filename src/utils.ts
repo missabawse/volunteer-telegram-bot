@@ -267,3 +267,65 @@ export const markInactiveVolunteers = async (): Promise<void> => {
     }
   }
 };
+
+// Get all available task templates for selection
+export const getAllTaskTemplates = (): { title: string; description: string; category: string }[] => {
+  return [
+    // Marketing tasks
+    { title: 'Pre-event Marketing', description: 'Promote the event before it happens', category: 'Marketing' },
+    { title: 'Post-event Marketing', description: 'Share highlights and follow-up after the event', category: 'Marketing' },
+    { title: 'Social Media Promotion', description: 'Create and share social media content', category: 'Marketing' },
+    { title: 'Newsletter Announcement', description: 'Include event in newsletter', category: 'Marketing' },
+    
+    // Coordination tasks
+    { title: 'Date Confirmation', description: 'Confirm the event date with all participants', category: 'Coordination' },
+    { title: 'Speaker Confirmation', description: 'Confirm speakers and their topics', category: 'Coordination' },
+    { title: 'Speaker Coordination', description: 'Coordinate with speakers and manage logistics', category: 'Coordination' },
+    { title: 'Venue Coordination', description: 'Coordinate venue logistics and setup', category: 'Coordination' },
+    
+    // Event Management
+    { title: 'Moderation', description: 'Moderate the panel discussion or event', category: 'Event Management' },
+    { title: 'Facilitation', description: 'Facilitate the workshop activities or discussion', category: 'Event Management' },
+    { title: 'Topic Preparation', description: 'Prepare discussion topics and questions', category: 'Event Management' },
+    { title: 'Technical Setup', description: 'Handle technical equipment and setup', category: 'Event Management' },
+    
+    // Content Creation
+    { title: 'Content Creation', description: 'Create content for the event or publication', category: 'Content' },
+    { title: 'Content Planning', description: 'Plan content structure and topics', category: 'Content' },
+    { title: 'Review and Editing', description: 'Review and edit content before publishing', category: 'Content' },
+    
+    // General
+    { title: 'Registration Management', description: 'Manage event registrations and attendee list', category: 'General' },
+    { title: 'Follow-up Communications', description: 'Send follow-up messages to attendees', category: 'General' },
+    { title: 'Documentation', description: 'Document event outcomes and learnings', category: 'General' }
+  ];
+};
+
+// Format task templates for display with numbering
+export const formatTaskTemplatesForSelection = (templates: { title: string; description: string; category: string }[]): string => {
+  let message = '';
+  const categories = [...new Set(templates.map(t => t.category))];
+  
+  categories.forEach(category => {
+    message += `\n**${category}:**\n`;
+    const categoryTasks = templates.filter(t => t.category === category);
+    categoryTasks.forEach((task) => {
+      const globalIndex = templates.indexOf(task) + 1;
+      message += `${globalIndex}. ${task.title} - ${task.description}\n`;
+    });
+  });
+  
+  return message;
+};
+
+// Filter events to show only today and future events
+export const filterFutureEvents = (events: Event[]): Event[] => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Start of today
+  
+  return events.filter(event => {
+    const eventDate = new Date(event.date);
+    eventDate.setHours(0, 0, 0, 0); // Start of event day
+    return eventDate >= today;
+  });
+};

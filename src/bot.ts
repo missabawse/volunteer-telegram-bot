@@ -29,6 +29,7 @@ import {
   finalizeEventCommand,
   listEventsCommand,
   eventDetailsCommand,
+  listEventsWithTasksCommand,
   cancelCommand
 } from './commands/events';
 
@@ -49,9 +50,9 @@ bot.catch((err) => {
   console.error('Bot error:', err);
 });
 
-// Start command
-bot.command('start', async (ctx) => {
-  const welcomeMessage = `🤖 **Volunteer Management Bot**
+// Help message function
+const getHelpMessage = () => {
+  return `🤖 **Volunteer Management Bot**
 
 Welcome! I help manage volunteer onboarding, event planning, and admin tasks.
 
@@ -65,35 +66,31 @@ Welcome! I help manage volunteer onboarding, event planning, and admin tasks.
 • \`/list_volunteers\` - View all volunteers
 • \`/add_volunteer @handle "Name"\` - Add new volunteer
 • \`/remove_volunteer @handle\` - Remove volunteer
-• \`/create_event\` - Create new event (interactive)
-• \`/assign_task <task_id> @volunteer\` - Assign tasks
 • \`/add_volunteer_with_status @handle "Name" <status>\` - Add volunteer with status
+• \`/create_event\` - Create new event (interactive with task selection)
+• \`/assign_task <task_id> @volunteer\` - Assign tasks to volunteers
 • \`/update_task_status <task_id> <status>\` - Update task status
 • \`/finalize_event <event_id>\` - Publish event
-• \`/list_events\` - View all events
-• \`/event_details <event_id>\` - View event details
+• \`/list_events\` - View all events (summary)
+• \`/list_events_with_tasks\` - View events with task IDs for reference
+• \`/event_details <event_id>\` - View detailed event information
 
 **General:**
+• \`/start\` - Show welcome message
 • \`/help\` - Show this help message
 • \`/cancel\` - Cancel current operation
 
 Let's get started! 🚀`;
+};
 
-  await ctx.reply(welcomeMessage, { parse_mode: 'Markdown' });
+// Start command
+bot.command('start', async (ctx) => {
+  await ctx.reply(getHelpMessage(), { parse_mode: 'Markdown' });
 });
 
 // Help command
 bot.command('help', async (ctx) => {
-  await bot.handleUpdate({
-    update_id: 0,
-    message: {
-      message_id: 0,
-      date: 0,
-      chat: ctx.chat,
-      from: ctx.from,
-      text: '/start'
-    }
-  } as any);
+  await ctx.reply(getHelpMessage(), { parse_mode: 'Markdown' });
 });
 
 // Volunteer commands
@@ -114,6 +111,7 @@ bot.command('update_task_status', updateTaskStatusCommand);
 bot.command('create_event', requireAdmin, createEventCommand);
 bot.command('finalize_event', requireAdmin, finalizeEventCommand);
 bot.command('list_events', requireAdmin, listEventsCommand);
+bot.command('list_events_with_tasks', requireAdmin, listEventsWithTasksCommand);
 bot.command('event_details', requireAdmin, eventDetailsCommand);
 
 // Utility commands
@@ -159,10 +157,42 @@ process.once('SIGTERM', () => {
   bot.stop();
 });
 
+// Set up bot commands for auto-completion
+const setupBotCommands = async () => {
+  try {
+    await bot.api.setMyCommands([
+      { command: 'start', description: 'Show welcome message and help' },
+      { command: 'help', description: 'Show all available commands' },
+      { command: 'onboard', description: 'Learn about the volunteer program' },
+      { command: 'my_status', description: 'Check your volunteer status' },
+      { command: 'commit', description: 'Sign up for event tasks' },
+      { command: 'admin_login', description: 'Authenticate as admin' },
+      { command: 'list_volunteers', description: 'View all volunteers (admin)' },
+      { command: 'add_volunteer', description: 'Add new volunteer (admin)' },
+      { command: 'remove_volunteer', description: 'Remove volunteer (admin)' },
+      { command: 'add_volunteer_with_status', description: 'Add volunteer with status (admin)' },
+      { command: 'create_event', description: 'Create new event with task selection (admin)' },
+      { command: 'assign_task', description: 'Assign tasks to volunteers (admin)' },
+      { command: 'update_task_status', description: 'Update task status' },
+      { command: 'finalize_event', description: 'Publish event (admin)' },
+      { command: 'list_events', description: 'View upcoming events (admin)' },
+      { command: 'list_events_with_tasks', description: 'View events with task IDs (admin)' },
+      { command: 'event_details', description: 'View detailed event information (admin)' },
+      { command: 'cancel', description: 'Cancel current operation' }
+    ]);
+    console.log('✅ Bot commands registered for auto-completion');
+  } catch (error) {
+    console.error('❌ Failed to set bot commands:', error);
+  }
+};
+
 // Start the bot
 const startBot = async () => {
   try {
     console.log('🚀 Starting Telegram Volunteer Bot...');
+    
+    // Set up command auto-completion
+    await setupBotCommands();
     
     // Run initial maintenance check
     await runMaintenanceTasks();

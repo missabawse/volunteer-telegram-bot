@@ -5,7 +5,10 @@ import {
   getRequiredTasks, 
   parseDate, 
   formatEventDetails,
-  formatTaskStatus
+  formatTaskStatus,
+  getAllTaskTemplates,
+  formatTaskTemplatesForSelection,
+  filterFutureEvents
 } from '../utils';
 
 // Store conversation state for interactive wizard
@@ -14,9 +17,22 @@ const conversationState = new Map<number, any>();
 // /create_event command - interactive wizard
 export const createEventCommand = async (ctx: CommandContext<Context>) => {
   const userId = ctx.from?.id;
+  const telegramHandle = ctx.from?.username;
   
   if (!userId) {
     await ctx.reply('❌ Unable to identify user.');
+    return;
+  }
+
+  if (!telegramHandle) {
+    await ctx.reply('❌ Unable to identify your Telegram handle. Please set a username.');
+    return;
+  }
+
+  // Check if user is an admin
+  const isAdmin = await DrizzleDatabaseService.isAdmin(telegramHandle);
+  if (!isAdmin) {
+    await ctx.reply('❌ Only admins can create events. Please contact an administrator.');
     return;
   }
 
@@ -26,7 +42,7 @@ export const createEventCommand = async (ctx: CommandContext<Context>) => {
   await ctx.reply(
     '🎯 **Event Creation Wizard**\n\n' +
     'Let\'s create a new event! I\'ll guide you through the process.\n\n' +
-    '**Step 1/4:** What is the event title?',
+    '**Step 1/6:** What is the event title?',
     { parse_mode: 'Markdown' }
   );
 };
@@ -47,7 +63,7 @@ export const handleEventWizard = async (ctx: Context) => {
       state.title = text;
       state.step = 'date';
       await ctx.reply(
-        '**Step 2/4:** When is the event?\n\n' +
+        '**Step 2/6:** When is the event?\n\n' +
         'Please provide the date in one of these formats:\n' +
         '• YYYY-MM-DD (e.g., 2024-03-15)\n' +
         '• DD/MM/YYYY (e.g., 15/03/2024)\n' +
@@ -66,18 +82,17 @@ export const handleEventWizard = async (ctx: Context) => {
       state.date = parsedDate.toISOString();
       state.step = 'format';
       await ctx.reply(
-        '**Step 3/4:** What is the event format?\n\n' +
+        '**Step 3/6:** What is the event format?\n\n' +
         'Please choose one:\n' +
-        '• **workshop** - Interactive learning session\n' +
-        '• **panel** - Discussion with multiple speakers\n' +
-        '• **conference** - Large-scale conference\n' +
         '• **talk** - Single speaker presentation\n' +
+        '• **workshop** - Interactive learning session\n' +
+        '• **moderated_discussion** - Facilitated discussion\n' +
+        '• **conference** - Large-scale conference\n' +
         '• **hangout** - Casual social gathering\n' +
         '• **meeting** - Formal meeting\n' +
         '• **external_speaker** - Event with external speaker\n' +
         '• **newsletter** - Newsletter content creation\n' +
         '• **social_media_takeover** - Social media content\n' +
-        '• **moderated_discussion** - Facilitated discussion\n' +
         '• **others** - Other event type\n\n' +
         'Type the format name (e.g., "workshop")',
         { parse_mode: 'Markdown' }
@@ -98,7 +113,7 @@ export const handleEventWizard = async (ctx: Context) => {
       state.format = format;
       state.step = 'venue';
       await ctx.reply(
-        '**Step 4/5:** What is the venue for this event?\n\n' +
+        '**Step 4/6:** What is the venue for this event?\n\n' +
         'You can provide a venue name/address, or type "TBD" if not confirmed yet, or "skip" for online events.',
         { parse_mode: 'Markdown' }
       );
@@ -109,23 +124,76 @@ export const handleEventWizard = async (ctx: Context) => {
       state.venue = venue;
       state.step = 'details';
       await ctx.reply(
-        '**Step 5/5:** Any additional details about the event?\n\n' +
-        'You can provide a description, special requirements, or type "skip" to finish without details.',
+        '**Step 5/6:** Any additional details about the event?\n\n' +
+        'You can provide a description, special requirements, or type "skip" to continue.',
         { parse_mode: 'Markdown' }
       );
       break;
 
     case 'details':
       const details = text.toLowerCase() === 'skip' ? undefined : text;
+      state.details = details;
+      state.step = 'tasks';
+      
+      // Show task selection options
+      const allTemplates = getAllTaskTemplates();
+      const recommendedTasks = getRequiredTasks(state.format);
+      
+      let taskMessage = '**Step 6/6:** Select tasks for this event\n\n';
+      taskMessage += '**Recommended tasks for this event format:**\n';
+      recommendedTasks.forEach((task, index) => {
+        taskMessage += `✅ ${index + 1}. ${task.title} - ${task.description}\n`;
+      });
+      
+      taskMessage += '\n**All available tasks:**';
+      taskMessage += formatTaskTemplatesForSelection(allTemplates);
+      
+      taskMessage += '\n\n**Instructions:**\n';
+      taskMessage += '• Type "recommended" to use only the recommended tasks\n';
+      taskMessage += '• Type task numbers separated by commas (e.g., "1,3,7,12") to select specific tasks\n';
+      taskMessage += '• Type "all" to include all available tasks\n';
+      taskMessage += '• Type "none" to create the event without any tasks';
+      
+      await ctx.reply(taskMessage, { parse_mode: 'Markdown' });
+      break;
+
+    case 'tasks':
+      const taskSelection = text.toLowerCase().trim();
+      let selectedTasks: { title: string; description: string }[] = [];
+      
+      if (taskSelection === 'recommended') {
+        selectedTasks = getRequiredTasks(state.format);
+      } else if (taskSelection === 'all') {
+        selectedTasks = getAllTaskTemplates().map(t => ({ title: t.title, description: t.description }));
+      } else if (taskSelection === 'none') {
+        selectedTasks = [];
+      } else {
+        // Parse comma-separated task numbers
+        const taskNumbers = taskSelection.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+        const allTemplates = getAllTaskTemplates();
+        
+        for (const num of taskNumbers) {
+          if (num >= 1 && num <= allTemplates.length) {
+            const template = allTemplates[num - 1];
+            if (template) {
+              selectedTasks.push({ title: template.title, description: template.description });
+            }
+          }
+        }
+        
+        if (selectedTasks.length === 0 && taskNumbers.length > 0) {
+          await ctx.reply('❌ Invalid task selection. Please try again with valid task numbers.');
+          return;
+        }
+      }
       
       // Create the event
       const event = await DrizzleDatabaseService.createEvent(
         state.title,
         state.date,
         state.format,
-        details,
-        state.venue,
-        userId
+        state.details,
+        state.venue
       );
       
       if (!event) {
@@ -134,11 +202,10 @@ export const handleEventWizard = async (ctx: Context) => {
         return;
       }
 
-      // Create required tasks for the event
-      const requiredTasks = getRequiredTasks(state.format);
+      // Create selected tasks for the event
       const createdTasks = [];
       
-      for (const taskTemplate of requiredTasks) {
+      for (const taskTemplate of selectedTasks) {
         const task = await DrizzleDatabaseService.createTask(
           event.id,
           taskTemplate.title,
@@ -155,7 +222,15 @@ export const handleEventWizard = async (ctx: Context) => {
       let successMessage = `✅ **Event created successfully!**\n\n`;
       successMessage += formatEventDetails(event, createdTasks);
       successMessage += `\nEvent ID: **${event.id}**\n`;
-      successMessage += `Use \`/assign_task <task_id> @volunteer\` to assign volunteers to tasks.`;
+      if (createdTasks.length > 0) {
+        successMessage += `\n**Task IDs for reference:**\n`;
+        createdTasks.forEach(task => {
+          successMessage += `• ${task.title}: **${task.id}**\n`;
+        });
+        successMessage += `\nUse \`/assign_task <task_id> @volunteer\` to assign volunteers to tasks.`;
+      } else {
+        successMessage += `\nNo tasks were created for this event.`;
+      }
       
       await ctx.reply(successMessage, { parse_mode: 'Markdown' });
       break;
@@ -268,14 +343,15 @@ const finalizeEvent = async (ctx: Context, eventId: number, event: Event) => {
 
 // /list_events command - list all events
 export const listEventsCommand = async (ctx: CommandContext<Context>) => {
-  const events = await DrizzleDatabaseService.getAllEvents();
+  const allEvents = await DrizzleDatabaseService.getAllEvents();
+  const events = filterFutureEvents(allEvents);
 
   if (!events || events.length === 0) {
-    await ctx.reply('📅 No events found.');
+    await ctx.reply('📅 No upcoming events found.');
     return;
   }
 
-  let message = '📅 **All Events:**\n\n';
+  let message = '📅 **Upcoming Events:**\n\n';
   
   const planningEvents = events.filter(e => e.status === 'planning');
   const publishedEvents = events.filter(e => e.status === 'published');
@@ -340,6 +416,46 @@ export const eventDetailsCommand = async (ctx: CommandContext<Context>) => {
   const eventDetails = formatEventDetails(event, tasks);
   
   await ctx.reply(`📅 **Event Details:**\n\n${eventDetails}`, { parse_mode: 'Markdown' });
+};
+
+// /list_events_with_tasks command - list events with task IDs for easy reference
+export const listEventsWithTasksCommand = async (ctx: CommandContext<Context>) => {
+  const allEvents = await DrizzleDatabaseService.getAllEvents();
+  const events = filterFutureEvents(allEvents);
+
+  if (!events || events.length === 0) {
+    await ctx.reply('📅 No upcoming events found.');
+    return;
+  }
+
+  let message = '📅 **Upcoming Events with Task IDs:**\n\n';
+  
+  for (const event of events) {
+    const tasks = await DrizzleDatabaseService.getEventTasks(event.id);
+    const statusIcon = event.status === 'published' ? '🟢' : event.status === 'planning' ? '🟡' : '🔴';
+    
+    message += `${statusIcon} **${event.title}** (Event ID: **${event.id}**)\n`;
+    message += `📅 ${new Date(event.date).toLocaleDateString()} | 📍 ${event.format.replace(/_/g, ' ')}\n`;
+    
+    if (tasks.length > 0) {
+      message += `**Tasks:**\n`;
+      tasks.forEach(task => {
+        const taskStatusIcon = task.status === 'complete' ? '✅' : task.status === 'in_progress' ? '🔄' : '❌';
+        message += `  • ${task.title} (ID: **${task.id}**) ${taskStatusIcon}\n`;
+      });
+    } else {
+      message += `  _No tasks assigned_\n`;
+    }
+    
+    message += '\n';
+  }
+
+  message += '💡 **Quick Commands:**\n';
+  message += '• `/assign_task <task_id> @volunteer` - Assign task to volunteer\n';
+  message += '• `/event_details <event_id>` - View detailed event info\n';
+  message += '• `/finalize_event <event_id>` - Finalize and publish event';
+
+  await ctx.reply(message, { parse_mode: 'Markdown' });
 };
 
 // Clear conversation state on cancel
