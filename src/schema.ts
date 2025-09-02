@@ -90,7 +90,6 @@ export const admins = pgTable('admins', {
 
 // Define relations
 export const volunteersRelations = relations(volunteers, ({ many }) => ({
-  taskAssignments: many(taskAssignments),
   createdEvents: many(events),
 }));
 

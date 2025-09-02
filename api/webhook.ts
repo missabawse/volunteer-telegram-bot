@@ -17,7 +17,6 @@ import {
   listVolunteersCommand,
   addVolunteerCommand,
   removeVolunteerCommand,
-  assignRoleCommand
 } from '../src/commands/admins';
 
 import {
@@ -101,7 +100,6 @@ bot.command('admin_login', adminLoginCommand);
 bot.command('list_volunteers', requireAdmin, listVolunteersCommand);
 bot.command('add_volunteer', requireAdmin, addVolunteerCommand);
 bot.command('remove_volunteer', requireAdmin, removeVolunteerCommand);
-bot.command('assign_role', requireAdmin, assignRoleCommand);
 bot.command('create_event', requireAdmin, createEventCommand);
 bot.command('finalize_event', requireAdmin, finalizeEventCommand);
 bot.command('list_events', requireAdmin, listEventsCommand);
