@@ -122,6 +122,7 @@ let botInitialized = false;
 
 // Create webhook handler for Vercel
 export default async function handler(req: any, res: any) {
+  console.log('Webhook called', req.method, req.headers);
   try {
     // Initialize bot if not already done
     if (!botInitialized) {
@@ -145,3 +146,9 @@ export default async function handler(req: any, res: any) {
     res.status(500).json({ error: 'Internal server error' });
   }
 }
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
