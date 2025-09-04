@@ -8,7 +8,7 @@ interface Volunteer {
   id: number;
   name: string;
   telegram_handle: string;
-  status: 'probation' | 'full' | 'lead';
+  status: 'probation' | 'active' | 'lead' | 'inactive';
   commitments: number;
   probation_start_date: string;
   created_at: string;
@@ -389,7 +389,7 @@ export class DrizzleDatabaseService {
     }
   }
 
-  static async createVolunteerWithStatus(name: string, telegramHandle: string, status: 'probation' | 'full' | 'lead'): Promise<Volunteer | null> {
+  static async createVolunteerWithStatus(name: string, telegramHandle: string, status: 'probation' | 'active' | 'lead' | 'inactive'): Promise<Volunteer | null> {
     try {
       const result = await db.insert(volunteers).values({
         name,
@@ -506,6 +506,98 @@ export class DrizzleDatabaseService {
     } catch (error) {
       console.error('Error removing admin:', error);
       return false;
+    }
+  }
+
+  // Commitment tracking and status management
+  static async resetMonthlyCommitments(): Promise<boolean> {
+    try {
+      await db.update(volunteers)
+        .set({ 
+          commitments: 0,
+          updated_at: new Date()
+        });
+      
+      return true;
+    } catch (error) {
+      console.error('Error resetting monthly commitments:', error);
+      return false;
+    }
+  }
+
+  static async updateVolunteerStatusBasedOnCommitments(): Promise<{ updated: number; inactive: number }> {
+    try {
+      // Get all volunteers with their current status and commitments
+      const allVolunteers = await db.select()
+        .from(volunteers);
+      
+      let updatedCount = 0;
+      let inactiveCount = 0;
+      
+      for (const volunteer of allVolunteers) {
+        const commitments = volunteer.commitments || 0;
+        const currentStatus = volunteer.status;
+        
+        // Check if volunteer should be marked inactive
+        if (commitments < 3 && (currentStatus === 'probation' || currentStatus === 'active')) {
+          await db.update(volunteers)
+            .set({ 
+              status: 'inactive',
+              updated_at: new Date()
+            })
+            .where(eq(volunteers.id, volunteer.id));
+          
+          updatedCount++;
+          inactiveCount++;
+        }
+        // Check if probation volunteer should be promoted to active
+        else if (commitments >= 3 && currentStatus === 'probation') {
+          await db.update(volunteers)
+            .set({ 
+              status: 'active',
+              updated_at: new Date()
+            })
+            .where(eq(volunteers.id, volunteer.id));
+          
+          updatedCount++;
+        }
+      }
+      
+      return { updated: updatedCount, inactive: inactiveCount };
+    } catch (error) {
+      console.error('Error updating volunteer status based on commitments:', error);
+      return { updated: 0, inactive: 0 };
+    }
+  }
+
+  static async getVolunteerStatusReport(): Promise<{
+    probation: Volunteer[];
+    active: Volunteer[];
+    lead: Volunteer[];
+    inactive: Volunteer[];
+    total: number;
+  }> {
+    try {
+      const allVolunteers = await this.getAllVolunteers();
+      
+      const report = {
+        probation: allVolunteers.filter(v => v.status === 'probation'),
+        active: allVolunteers.filter(v => v.status === 'active'),
+        lead: allVolunteers.filter(v => v.status === 'lead'),
+        inactive: allVolunteers.filter(v => v.status === 'inactive'),
+        total: allVolunteers.length
+      };
+      
+      return report;
+    } catch (error) {
+      console.error('Error generating volunteer status report:', error);
+      return {
+        probation: [],
+        active: [],
+        lead: [],
+        inactive: [],
+        total: 0
+      };
     }
   }
 }

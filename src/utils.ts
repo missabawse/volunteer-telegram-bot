@@ -1,5 +1,6 @@
 import { Bot } from 'grammy';
 import { DrizzleDatabaseService } from './db-drizzle';
+import { parseTopicLink } from './parse-topic-link';
 
 // Import types from the types module
 import type { Volunteer, Event, Task, TaskAssignment } from './types';
@@ -100,11 +101,13 @@ export const formatVolunteerStatus = (volunteer: Volunteer): string => {
   
   if (volunteer.status === 'probation') {
     if (isEligible) {
-      statusText += `🎉 **Eligible for promotion to full volunteer!**\n`;
+      statusText += `🎉 **Eligible for promotion to active volunteer!**\n`;
     } else {
       statusText += `Probation period: ${daysRemaining} days remaining\n`;
       statusText += `Commitments needed: ${commitmentsNeeded}\n`;
     }
+  } else if (volunteer.status === 'inactive') {
+    statusText += `⚠️ **Status: INACTIVE** - Contact an admin to reactivate\n`;
   }
   
   return statusText;
@@ -138,7 +141,18 @@ export const formatEventDetails = (event: Event, tasks?: Task[]): string => {
 
 // Send celebration broadcast when volunteer is promoted
 export const sendPromotionBroadcast = async (bot: Bot, volunteer: Volunteer): Promise<void> => {
-  const channelId = process.env.VOLUNTEER_CHANNEL_ID;
+  let channelId = process.env.VOLUNTEER_CHANNEL_ID;
+  let topicId = process.env.VOLUNTEER_TOPIC_ID;
+  
+  // Check if topic link is provided instead
+  const topicLink = process.env.VOLUNTEER_TOPIC_LINK;
+  if (topicLink && !channelId) {
+    const parsed = parseTopicLink(topicLink);
+    if (parsed) {
+      channelId = parsed.channelId;
+      topicId = parsed.topicId;
+    }
+  }
   
   if (!channelId) {
     console.log('No volunteer channel configured for broadcast');
@@ -147,12 +161,19 @@ export const sendPromotionBroadcast = async (bot: Bot, volunteer: Volunteer): Pr
   
   const message = `🎉 **Congratulations!** 🎉\n\n` +
     `${volunteer.name} (@${volunteer.telegram_handle}) has successfully completed their probation period ` +
-    `and is now a **full volunteer**!\n\n` +
+    `and is now an **active volunteer**!\n\n` +
     `They completed ${volunteer.commitments} commitments and are ready to take on more responsibilities. ` +
     `Welcome to the team! 🚀`;
   
   try {
-    await bot.api.sendMessage(channelId, message, { parse_mode: 'Markdown' });
+    const options: any = { parse_mode: 'Markdown' };
+    
+    // If topic ID is provided, send to specific topic in forum channel
+    if (topicId) {
+      options.message_thread_id = parseInt(topicId);
+    }
+    
+    await bot.api.sendMessage(channelId, message, options);
   } catch (error) {
     console.error('Error sending promotion broadcast:', error);
   }
@@ -246,25 +267,76 @@ export const checkAndPromoteVolunteers = async (bot: Bot): Promise<void> => {
       const { isEligible } = checkProbationStatus(volunteer);
       
       if (isEligible) {
-        const success = await DrizzleDatabaseService.updateVolunteerStatus(volunteer.id, 'full');
+        const success = await DrizzleDatabaseService.updateVolunteerStatus(volunteer.id, 'active');
         if (success) {
-          await sendPromotionBroadcast(bot, { ...volunteer, status: 'full' });
+          await sendPromotionBroadcast(bot, { ...volunteer, status: 'active' });
         }
       }
     }
   }
 };
 
-// Mark inactive volunteers
-export const markInactiveVolunteers = async (): Promise<void> => {
-  const volunteers = await DrizzleDatabaseService.getAllVolunteers();
-  
-  for (const volunteer of volunteers) {
-    if (volunteer.status === 'full' && checkInactiveStatus(volunteer)) {
-      // Note: 'inactive' status removed from new schema, volunteers are now either probation, full, or lead
-      // Consider implementing a different approach for inactive volunteers
-      console.log(`Volunteer ${volunteer.name} appears inactive but no inactive status available`);
+// Mark inactive volunteers based on commitment tracking
+export const processMonthlyVolunteerStatus = async (bot: Bot): Promise<string> => {
+  try {
+    // Update volunteer statuses based on commitments
+    const { updated, inactive } = await DrizzleDatabaseService.updateVolunteerStatusBasedOnCommitments();
+    
+    // Reset commitments for the new month
+    await DrizzleDatabaseService.resetMonthlyCommitments();
+    
+    // Generate status report
+    const report = await DrizzleDatabaseService.getVolunteerStatusReport();
+    
+    let message = `📊 **Monthly Volunteer Status Report**\n\n`;
+    message += `**Status Updates:**\n`;
+    message += `• ${updated} volunteers had status changes\n`;
+    message += `• ${inactive} volunteers marked as inactive\n\n`;
+    
+    message += `**Current Volunteer Breakdown:**\n`;
+    message += `👥 **Total Volunteers:** ${report.total}\n\n`;
+    
+    if (report.lead.length > 0) {
+      message += `🌟 **Lead Volunteers (${report.lead.length}):**\n`;
+      report.lead.forEach(v => {
+        message += `• ${v.name} (@${v.telegram_handle})\n`;
+      });
+      message += `\n`;
     }
+    
+    if (report.active.length > 0) {
+      message += `✅ **Active Volunteers (${report.active.length}):**\n`;
+      report.active.forEach(v => {
+        message += `• ${v.name} (@${v.telegram_handle}) - ${v.commitments} commitments\n`;
+      });
+      message += `\n`;
+    }
+    
+    if (report.probation.length > 0) {
+      message += `🔄 **Probation Volunteers (${report.probation.length}):**\n`;
+      report.probation.forEach(v => {
+        message += `• ${v.name} (@${v.telegram_handle}) - ${v.commitments} commitments\n`;
+      });
+      message += `\n`;
+    }
+    
+    if (report.inactive.length > 0) {
+      message += `⚠️ **Inactive Volunteers (${report.inactive.length}):**\n`;
+      report.inactive.forEach(v => {
+        message += `• ${v.name} (@${v.telegram_handle}) - ${v.commitments} commitments\n`;
+      });
+      message += `\n`;
+    }
+    
+    message += `**Next Steps:**\n`;
+    message += `• Probation volunteers need 3 commitments to become active\n`;
+    message += `• Inactive volunteers should be contacted for reactivation\n`;
+    message += `• Commitment counters have been reset for the new month\n`;
+    
+    return message;
+  } catch (error) {
+    console.error('Error processing monthly volunteer status:', error);
+    return 'Error generating monthly volunteer status report.';
   }
 };
 

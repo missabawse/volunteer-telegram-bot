@@ -6,9 +6,10 @@ A comprehensive Telegram bot built with grammY and Drizzle ORM for managing volu
 
 ### 🎯 Volunteer Management
 - **Probation System**: New volunteers must complete 3 commitments within 3 months
-- **Automatic Promotion**: Volunteers are automatically promoted to full status when criteria are met
+- **Automatic Promotion**: Volunteers are automatically promoted to active status when criteria are met
 - **Status Tracking**: Track volunteer progress and commitments
-- **Inactivity Detection**: Automatically flag volunteers inactive after 3 months
+- **Inactivity Detection**: Automatically mark volunteers inactive after insufficient commitments
+- **Monthly Processing**: Automated monthly status updates and reporting
 
 ### 📅 Event Management
 - **Interactive Event Creation**: Step-by-step wizard for creating events
@@ -55,6 +56,9 @@ ADMIN_SECRET=your_admin_secret_password
 
 # Optional: Channel ID for volunteer promotion broadcasts
 VOLUNTEER_CHANNEL_ID=your_volunteer_channel_id
+
+# Optional: Admin Channel ID for monthly reports
+ADMIN_CHANNEL_ID=your_admin_channel_id
 ```
 
 ### 4. Database Setup
@@ -95,10 +99,20 @@ npm start
 - `/list_volunteers` - View all volunteers and their status
 - `/add_volunteer @handle "Full Name"` - Manually add a volunteer
 - `/remove_volunteer @handle` - Remove a volunteer
+- `/add_volunteer_with_status @handle "Name" <status>` - Add volunteer with specific status
 - `/create_event` - Interactive event creation wizard
-- `/assign_role <event_id> <role> @volunteer` - Assign volunteer to role
-- `/finalize_event <event_id>` - Publish event to Meetup (mock)
+- `/assign_task <task_id> @volunteer` - Assign volunteer to task
+- `/update_task_status <task_id> <status>` - Update task status
+- `/monthly_report` - Generate monthly volunteer status report
+- `/volunteer_status_report` - View current volunteer status
+- `/broadcast` - Show broadcast menu for testing
+- `/broadcast_volunteers` - Broadcast volunteer status list
+- `/broadcast_events` - Broadcast upcoming events
+- `/broadcast_tasks` - Broadcast available events needing volunteers
+- `/broadcast_custom <message>` - Send custom broadcast message
+- `/finalize_event <event_id>` - Publish event
 - `/list_events` - View all events
+- `/list_events_with_tasks` - View events with task IDs
 - `/event_details <event_id>` - View detailed event information
 
 ### Utility Commands
@@ -137,13 +151,18 @@ npm start
    - Must complete 3 commitments within 3 months
    - Can sign up for any available roles
 
-2. **Full Volunteer** (Promoted automatically)
-   - Completed probation requirements
+2. **Active Volunteer** (Promoted automatically)
+   - Completed probation requirements (3 commitments in 3 months)
    - Celebration broadcast sent to volunteer channel
    - Full access to all opportunities
 
-3. **Inactive** (Automatically flagged)
-   - No activity for more than 3 months
+3. **Lead Volunteer** (Admin assigned)
+   - Senior volunteers with leadership responsibilities
+   - Can help with advanced tasks and mentoring
+
+4. **Inactive** (Automatically assigned)
+   - Failed to meet 3 commitments in a month
+   - Applies to both probation and active volunteers
    - Can be reactivated by admin
 
 ## Database Schema
@@ -186,10 +205,22 @@ npm run watch
 
 ## Maintenance
 
-The bot automatically runs maintenance tasks every hour:
+The bot automatically runs maintenance tasks:
+
+### Hourly Tasks
 - Check for volunteer promotions
-- Mark inactive volunteers
 - Send celebration broadcasts
+
+### Monthly Tasks (1st of each month at 9:00 AM)
+- Update volunteer statuses based on commitments
+- Mark volunteers inactive if they have < 3 commitments
+- Promote probation volunteers to active if they have ≥ 3 commitments
+- Reset commitment counters for new month
+- Send monthly status report to admin channel
+
+### Manual Commands
+- `/monthly_report` - Manually trigger monthly processing
+- `/volunteer_status_report` - View current status without processing
 
 ## Security Notes
 

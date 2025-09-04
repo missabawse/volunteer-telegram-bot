@@ -6,7 +6,7 @@ export interface Volunteer {
   id: number;
   name: string;
   telegram_handle: string;
-  status: 'probation' | 'full' | 'lead';
+  status: 'probation' | 'active' | 'lead' | 'inactive';
   commitments: number;
   probation_start_date: string;
   created_at: string;

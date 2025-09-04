@@ -10,7 +10,9 @@ import {
   myStatusCommand, 
   commitCommand,
   assignTaskCommand,
-  updateTaskStatusCommand
+  updateTaskStatusCommand,
+  monthlyReportCommand,
+  volunteerStatusReportCommand
 } from './commands/volunteers';
 
 import { 
@@ -23,6 +25,14 @@ import {
 } from './commands/admins';
 
 import {
+  broadcastCommand,
+  broadcastVolunteersCommand,
+  broadcastEventsCommand,
+  broadcastTasksCommand,
+  broadcastCustomCommand
+} from './commands/broadcast';
+
+import {
   createEventCommand,
   handleEventWizard,
   handleFinalizationConfirmation,
@@ -33,7 +43,8 @@ import {
   cancelCommand
 } from './commands/events';
 
-import { markInactiveVolunteers, checkAndPromoteVolunteers } from './utils';
+import { processMonthlyVolunteerStatus, checkAndPromoteVolunteers } from './utils';
+import { VolunteerScheduler } from './scheduler';
 
 // Validate required environment variables
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -44,6 +55,9 @@ if (!BOT_TOKEN) {
 
 // Create bot instance
 const bot = new Bot(BOT_TOKEN);
+
+// Create scheduler instance
+const scheduler = new VolunteerScheduler(bot);
 
 // Error handling
 bot.catch((err) => {
@@ -70,6 +84,13 @@ Welcome! I help manage volunteer onboarding, event planning, and admin tasks.
 • \`/create_event\` - Create new event (interactive with task selection)
 • \`/assign_task <task_id> @volunteer\` - Assign tasks to volunteers
 • \`/update_task_status <task_id> <status>\` - Update task status
+• \`/monthly_report\` - Generate monthly volunteer status report
+• \`/volunteer_status_report\` - View current volunteer status
+• \`/broadcast\` - Show broadcast menu for testing
+• \`/broadcast_volunteers\` - Broadcast volunteer status list
+• \`/broadcast_events\` - Broadcast upcoming events
+• \`/broadcast_tasks\` - Broadcast available tasks
+• \`/broadcast_custom <message>\` - Send custom broadcast message
 • \`/finalize_event <event_id>\` - Publish event
 • \`/list_events\` - View all events (summary)
 • \`/list_events_with_tasks\` - View events with task IDs for reference
@@ -108,11 +129,20 @@ bot.command('remove_volunteer', requireAdmin, removeVolunteerCommand);
 bot.command('assign_task', requireAdmin, assignTaskCommand);
 bot.command('add_volunteer_with_status', requireAdmin, addVolunteerWithStatusCommand);
 bot.command('update_task_status', updateTaskStatusCommand);
+bot.command('monthly_report', requireAdmin, monthlyReportCommand);
+bot.command('volunteer_status_report', requireAdmin, volunteerStatusReportCommand);
 bot.command('create_event', requireAdmin, createEventCommand);
 bot.command('finalize_event', requireAdmin, finalizeEventCommand);
 bot.command('list_events', requireAdmin, listEventsCommand);
 bot.command('list_events_with_tasks', requireAdmin, listEventsWithTasksCommand);
 bot.command('event_details', requireAdmin, eventDetailsCommand);
+
+// Broadcast commands (admin only)
+bot.command('broadcast', requireAdmin, broadcastCommand);
+bot.command('broadcast_volunteers', requireAdmin, broadcastVolunteersCommand);
+bot.command('broadcast_events', requireAdmin, broadcastEventsCommand);
+bot.command('broadcast_tasks', requireAdmin, broadcastTasksCommand);
+bot.command('broadcast_custom', requireAdmin, broadcastCustomCommand);
 
 // Utility commands
 bot.command('cancel', cancelCommand);
@@ -131,9 +161,6 @@ const runMaintenanceTasks = async () => {
   console.log('🔧 Running maintenance tasks...');
   
   try {
-    // Mark inactive volunteers
-    await markInactiveVolunteers();
-    
     // Check for volunteer promotions
     await checkAndPromoteVolunteers(bot);
     
@@ -149,11 +176,13 @@ setInterval(runMaintenanceTasks, 60 * 60 * 1000);
 // Graceful shutdown
 process.once('SIGINT', () => {
   console.log('🛑 Received SIGINT, shutting down gracefully...');
+  scheduler.stop();
   bot.stop();
 });
 
 process.once('SIGTERM', () => {
   console.log('🛑 Received SIGTERM, shutting down gracefully...');
+  scheduler.stop();
   bot.stop();
 });
 
@@ -174,10 +203,17 @@ const setupBotCommands = async () => {
       { command: 'create_event', description: 'Create new event with task selection (admin)' },
       { command: 'assign_task', description: 'Assign tasks to volunteers (admin)' },
       { command: 'update_task_status', description: 'Update task status' },
+      { command: 'monthly_report', description: 'Generate monthly volunteer status report (admin)' },
+      { command: 'volunteer_status_report', description: 'View current volunteer status (admin)' },
       { command: 'finalize_event', description: 'Publish event (admin)' },
       { command: 'list_events', description: 'View upcoming events (admin)' },
       { command: 'list_events_with_tasks', description: 'View events with task IDs (admin)' },
       { command: 'event_details', description: 'View detailed event information (admin)' },
+      { command: 'broadcast', description: 'Show broadcast menu (admin)' },
+      { command: 'broadcast_volunteers', description: 'Broadcast volunteer status (admin)' },
+      { command: 'broadcast_events', description: 'Broadcast upcoming events (admin)' },
+      { command: 'broadcast_tasks', description: 'Broadcast available tasks (admin)' },
+      { command: 'broadcast_custom', description: 'Send custom broadcast message (admin)' },
       { command: 'cancel', description: 'Cancel current operation' }
     ]);
     console.log('✅ Bot commands registered for auto-completion');
@@ -196,6 +232,9 @@ const startBot = async () => {
     
     // Run initial maintenance check
     await runMaintenanceTasks();
+    
+    // Start the monthly scheduler
+    scheduler.start();
     
     // Start polling for updates
     await bot.start();

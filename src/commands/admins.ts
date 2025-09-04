@@ -4,6 +4,7 @@ import {
   formatVolunteerStatus, 
   validateTelegramHandle,
 } from '../utils';
+import { parseTopicLink } from '../parse-topic-link';
 
 // Admin authentication middleware
 export const requireAdmin = async (ctx: CommandContext<Context>, next: () => Promise<void>) => {
@@ -73,33 +74,50 @@ export const listVolunteersCommand = async (ctx: CommandContext<Context>) => {
     return;
   }
 
-  let message = '📋 **All Volunteers:**\n\n';
+  let message = '📋 *All Volunteers:*\n\n';
   
   // Group volunteers by status
   const probationVolunteers = volunteers.filter(v => v.status === 'probation');
-  const fullVolunteers = volunteers.filter(v => v.status === 'full');
+  const activeVolunteers = volunteers.filter(v => v.status === 'active');
   const leadVolunteers = volunteers.filter(v => v.status === 'lead');
+  const inactiveVolunteers = volunteers.filter(v => v.status === 'inactive');
 
   if (probationVolunteers.length > 0) {
-    message += '**🟡 Probation Volunteers:**\n';
+    message += '*🟡 Probation Volunteers:*\n';
     probationVolunteers.forEach(volunteer => {
-      message += `• ${volunteer.name} (@${volunteer.telegram_handle}) - ${volunteer.commitments}/3 commitments\n`;
+      const escapedName = volunteer.name.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+      const escapedHandle = volunteer.telegram_handle.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+      message += `• ${escapedName} (@${escapedHandle}) \\- ${volunteer.commitments}/3 commitments\n`;
     });
     message += '\n';
   }
 
-  if (fullVolunteers.length > 0) {
-    message += '**🟢 Full Volunteers:**\n';
-    fullVolunteers.forEach(volunteer => {
-      message += `• ${volunteer.name} (@${volunteer.telegram_handle}) - ${volunteer.commitments} commitments\n`;
+  if (activeVolunteers.length > 0) {
+    message += '*🟢 Active Volunteers:*\n';
+    activeVolunteers.forEach(volunteer => {
+      const escapedName = volunteer.name.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+      const escapedHandle = volunteer.telegram_handle.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+      message += `• ${escapedName} (@${escapedHandle}) \\- ${volunteer.commitments} commitments\n`;
+    });
+    message += '\n';
+  }
+
+  if (inactiveVolunteers.length > 0) {
+    message += '*⚫ Inactive Volunteers:*\n';
+    inactiveVolunteers.forEach(volunteer => {
+      const escapedName = volunteer.name.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+      const escapedHandle = volunteer.telegram_handle.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+      message += `• ${escapedName} (@${escapedHandle}) \\- ${volunteer.commitments} commitments\n`;
     });
     message += '\n';
   }
 
   if (leadVolunteers.length > 0) {
-    message += '**⭐ Lead Volunteers:**\n';
+    message += '*⭐ Lead Volunteers:*\n';
     leadVolunteers.forEach(volunteer => {
-      message += `• ${volunteer.name} (@${volunteer.telegram_handle}) - ${volunteer.commitments} commitments\n`;
+      const escapedName = volunteer.name.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+      const escapedHandle = volunteer.telegram_handle.replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+      message += `• ${escapedName} (@${escapedHandle}) \\- ${volunteer.commitments} commitments\n`;
     });
   }
 
@@ -210,21 +228,21 @@ export const addVolunteerWithStatusCommand = async (ctx: CommandContext<Context>
   if (!args || args.length < 3) {
     await ctx.reply(
       '❌ **Usage:** `/add_volunteer_with_status @handle "Full Name" <status>`\n\n' +
-      '**Available statuses:** probation, full, lead\n\n' +
-      '**Example:** `/add_volunteer_with_status @johndoe "John Doe" full`',
+      '**Available statuses:** probation, active, lead, inactive\n\n' +
+      '**Example:** `/add_volunteer_with_status @johndoe "John Doe" active`',
       { parse_mode: 'Markdown' }
     );
     return;
   }
 
   const handleInput = args[0];
-  const status = args[args.length - 1] as 'probation' | 'full' | 'lead';
+  const status = args[args.length - 1] as 'probation' | 'active' | 'lead' | 'inactive';
   const name = args.slice(1, -1).join(' ').replace(/"/g, ''); // Remove quotes if present
 
   // Validate status
-  const validStatuses = ['probation', 'full', 'lead'];
+  const validStatuses = ['probation', 'active', 'lead', 'inactive'];
   if (!validStatuses.includes(status)) {
-    await ctx.reply('❌ Invalid status. Use: probation, full, or lead');
+    await ctx.reply('❌ Invalid status. Use: probation, active, lead, or inactive');
     return;
   }
 

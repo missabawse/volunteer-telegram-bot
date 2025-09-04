@@ -4,7 +4,8 @@ import {
   formatVolunteerStatus, 
   canVolunteerCommit,
   formatTaskStatus,
-  checkAndPromoteVolunteers
+  checkAndPromoteVolunteers,
+  processMonthlyVolunteerStatus
 } from '../utils';
 
 // /onboard command - explains volunteer system and common roles
@@ -13,8 +14,8 @@ export const onboardCommand = async (ctx: CommandContext<Context>) => {
 
 **How it works:**
 • New volunteers start in **probation status**
-• Complete **3 commitments within 3 months** to become a full volunteer
-• Full volunteers get access to additional opportunities and recognition
+• Complete **3 commitments within 3 months** to become an active volunteer
+• Active volunteers get access to additional opportunities and recognition
 
 **Common volunteer roles:**
 • **Date Confirmation** - Coordinate with speakers/venues for scheduling
@@ -237,5 +238,93 @@ export const updateTaskStatusCommand = async (ctx: CommandContext<Context>) => {
     );
   } else {
     await ctx.reply('❌ Failed to update task status. Please try again.');
+  }
+};
+
+// /monthly_report command (admin only) - generate monthly volunteer status report
+export const monthlyReportCommand = async (ctx: CommandContext<Context>) => {
+  const telegramHandle = ctx.from?.username;
+  
+  if (!telegramHandle) {
+    await ctx.reply('❌ Please set a Telegram username to use this bot.');
+    return;
+  }
+
+  // Check if user is admin
+  const isAdmin = await DrizzleDatabaseService.isAdmin(telegramHandle);
+  if (!isAdmin) {
+    await ctx.reply('❌ This command is only available to administrators.');
+    return;
+  }
+
+  await ctx.reply('📊 Generating monthly volunteer status report...');
+  
+  try {
+    const reportMessage = await processMonthlyVolunteerStatus(ctx.api as any);
+    await ctx.reply(reportMessage, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Error generating monthly report:', error);
+    await ctx.reply('❌ Failed to generate monthly report. Please try again later.');
+  }
+};
+
+// /volunteer_status_report command (admin only) - get current volunteer status without processing
+export const volunteerStatusReportCommand = async (ctx: CommandContext<Context>) => {
+  const telegramHandle = ctx.from?.username;
+  
+  if (!telegramHandle) {
+    await ctx.reply('❌ Please set a Telegram username to use this bot.');
+    return;
+  }
+
+  // Check if user is admin
+  const isAdmin = await DrizzleDatabaseService.isAdmin(telegramHandle);
+  if (!isAdmin) {
+    await ctx.reply('❌ This command is only available to administrators.');
+    return;
+  }
+
+  try {
+    const report = await DrizzleDatabaseService.getVolunteerStatusReport();
+    
+    let message = `📊 **Current Volunteer Status Report**\n\n`;
+    message += `👥 **Total Volunteers:** ${report.total}\n\n`;
+    
+    if (report.lead.length > 0) {
+      message += `🌟 **Lead Volunteers (${report.lead.length}):**\n`;
+      report.lead.forEach(v => {
+        message += `• ${v.name} (@${v.telegram_handle}) - ${v.commitments} commitments\n`;
+      });
+      message += `\n`;
+    }
+    
+    if (report.active.length > 0) {
+      message += `✅ **Active Volunteers (${report.active.length}):**\n`;
+      report.active.forEach(v => {
+        message += `• ${v.name} (@${v.telegram_handle}) - ${v.commitments} commitments\n`;
+      });
+      message += `\n`;
+    }
+    
+    if (report.probation.length > 0) {
+      message += `🔄 **Probation Volunteers (${report.probation.length}):**\n`;
+      report.probation.forEach(v => {
+        message += `• ${v.name} (@${v.telegram_handle}) - ${v.commitments} commitments\n`;
+      });
+      message += `\n`;
+    }
+    
+    if (report.inactive.length > 0) {
+      message += `⚠️ **Inactive Volunteers (${report.inactive.length}):**\n`;
+      report.inactive.forEach(v => {
+        message += `• ${v.name} (@${v.telegram_handle}) - ${v.commitments} commitments\n`;
+      });
+      message += `\n`;
+    }
+    
+    await ctx.reply(message, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Error generating status report:', error);
+    await ctx.reply('❌ Failed to generate status report. Please try again later.');
   }
 };

@@ -2,7 +2,7 @@ import { pgTable, serial, text, integer, timestamp, index, pgEnum } from 'drizzl
 import { relations } from 'drizzle-orm';
 
 // Define enums
-export const volunteerStatusEnum = pgEnum('volunteer_status', ['probation', 'full', 'lead']);
+export const volunteerStatusEnum = pgEnum('volunteer_status', ['probation', 'active', 'lead', 'inactive']);
 export const eventFormatEnum = pgEnum('event_format', [
   'moderated_discussion',
   'conference', 

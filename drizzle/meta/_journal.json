@@ -8,6 +8,13 @@
       "when": 1756716875606,
       "tag": "0000_blue_mariko_yashida",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1756971084696,
+      "tag": "0001_safe_enum_update",
+      "breakpoints": true
     }
   ]
 }
