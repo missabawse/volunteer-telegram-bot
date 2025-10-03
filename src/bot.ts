@@ -4,6 +4,16 @@ import dotenv from 'dotenv';
 // Load environment variables first
 dotenv.config();
 
+// Global error handlers for better diagnostics
+process.on('unhandledRejection', (reason: any, promise) => {
+  console.error('UnhandledPromiseRejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('UncaughtException:', err);
+  // Do not exit immediately during dev to aid debugging
+});
+
 // Import command handlers
 import { 
   onboardCommand, 
@@ -25,14 +35,14 @@ import {
   removeVolunteerCommand,
   handleAddVolunteerWizard,
   setCommitCountCommand,
-  removeAssignmentCommand,
   setStatusCommand,
+  removeAssignmentCommand,
   resetQuarterCommand,
   handleResetQuarterWizard,
   removeAdminCommand
 } from './commands/admins';
 
-import {
+import { 
   broadcastCommand,
   broadcastVolunteersCommand,
   broadcastEventsCommand,
@@ -42,15 +52,16 @@ import {
   handleBroadcastEventDetailsConfirmation
 } from './commands/broadcast';
 
+import { ensureDbReady } from './drizzle';
 import { 
   createEventCommand,
-  handleEventWizard,
   editEventCommand,
-  handleEditEventWizard,
-  listEventsCommand,
   eventDetailsCommand,
-  removeEventCommand,
+  handleEditEventWizard,
+  handleEventWizard,
   handleRemoveEventConfirmation,
+  listEventsCommand,
+  removeEventCommand,
   cancelCommand
 } from './commands/events';
 
@@ -292,6 +303,10 @@ const setupBotCommands = async () => {
 const startBot = async () => {
   try {
     console.log('🚀 Starting Telegram Volunteer Bot...');
+    console.log(`NODE_ENV=${process.env.NODE_ENV || 'development'}`);
+
+    // Ensure database is ready (forces PGlite init in dev)
+    await ensureDbReady();
     
     // Set up command auto-completion
     await setupBotCommands();
