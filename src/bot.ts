@@ -1,6 +1,10 @@
 import { Bot, Context, session, SessionFlavor } from 'grammy';
 import dotenv from 'dotenv';
 
+//Uncomment this if using node v20.10.0 or higher
+import { setDefaultResultOrder } from "node:dns";
+setDefaultResultOrder("ipv6first");
+
 // Load environment variables first
 dotenv.config();
 
