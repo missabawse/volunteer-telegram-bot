@@ -442,9 +442,7 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 ### Bot Command Registration Failures
 
 If you see 
-```❌ Failed to set bot commands: HttpError: Network request for 'setMyCommands' failed!```, uncomment these lines in 
-src/bot.ts
-:
+```❌ Failed to set bot commands: HttpError: Network request for 'setMyCommands' failed!```, add these lines in src/bot.ts (after the imports):
 
 ```
 import { setDefaultResultOrder } from "node:dns";

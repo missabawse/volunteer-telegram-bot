@@ -1,12 +1,6 @@
 import { Bot, Context, session, SessionFlavor } from 'grammy';
 import dotenv from 'dotenv';
 
-// Fix DNS resolution issues in Node.js v17+ 
-// (Node v17.0.0 changed default DNS order from IPv6-first to IPv4-first)
-//Uncomment if needed
-// import { setDefaultResultOrder } from "node:dns";
-// setDefaultResultOrder("ipv6first");
-
 // Load environment variables first
 dotenv.config();
 
