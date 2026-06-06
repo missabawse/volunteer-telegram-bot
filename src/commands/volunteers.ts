@@ -2,12 +2,13 @@ import { Context, CommandContext, InlineKeyboard } from 'grammy';
 import fs from 'fs/promises';
 import path from 'path';
 import { DrizzleDatabaseService } from '../db-drizzle';
-import { 
-  formatVolunteerStatus, 
+import {
+  formatVolunteerStatus,
   canVolunteerCommit,
   formatTaskStatus,
   promoteIfEligible
 } from '../utils';
+import { TASKS } from '../utils/task-templates';
 
 // Escape special characters for Telegram Markdown (v1) parse_mode
 // Only escape characters that affect formatting to prevent visible backslashes
@@ -260,13 +261,16 @@ export const commitCommand = async (ctx: CommandContext<Context>) => {
   
   const safeTaskTitle = escapeMarkdown(task.title);
   const safeEventTitle = event?.title ? escapeMarkdown(event.title) : 'Unknown';
+  const template = TASKS.find(t => t.title === task.title);
+  const guidanceNote = template?.guidance ? `\n\n📌 *Guidance:* ${escapeMarkdown(template.guidance)}` : '';
   await ctx.reply(
     `✅ **Successfully committed to task!**\n\n` +
     `Task: ${safeTaskTitle}\n` +
     `Event: ${safeEventTitle}\n` +
     `Your current commitment count: ${volunteer.commitments}\n\n` +
     `💡 Your commitment count will increase by 1 when an admin marks this task as complete.\n\n` +
-    `Thank you for volunteering! 🙏`,
+    `Thank you for volunteering! 🙏` +
+    guidanceNote,
     { parse_mode: 'Markdown' }
   );
 };

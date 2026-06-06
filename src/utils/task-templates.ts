@@ -12,15 +12,16 @@ export type TaskTemplate = {
   title: string;
   description: string;
   category: 'Base' | 'Marketing' | 'Coordination' | 'Event Management' | 'Coding Project' | 'Content' | 'General';
+  guidance?: string;
 };
 
 // Single source of truth for all task templates (easy to edit)
 export const TASKS: TaskTemplate[] = [
 
   // Marketing
-  { title: 'Pre-event Marketing', description: 'Come up with marketing content using the posters created', category: 'Marketing' },
-  { title: 'Post-event Marketing', description: 'Share highlights and follow-up after the event', category: 'Marketing' },
-  { title: 'Poster Making', description: 'Create posters (square and banner) for the event', category: 'Marketing' },
+  { title: 'Pre-event Marketing', description: 'Come up with marketing content using the posters created', category: 'Marketing', guidance: 'Once your content is ready, ask one of the leads to help you schedule the post. Get inspiration from our other posts on pre-event marketing.' },
+  { title: 'Post-event Marketing', description: 'Share highlights and follow-up after the event', category: 'Marketing', guidance: 'Once your content is ready, ask one of the leads to help you schedule the post. Get inspiration from our other posts on post-event marketing.' },
+  { title: 'Poster Making', description: 'Create posters (square and banner) for the event', category: 'Marketing', guidance: 'Use Canva (credentials: https://docs.google.com/document/d/1NuaWttmmgGuhTcqPh02s_eMrlq6frLtBXhFFVPRiQDk/edit?usp=sharing) or our content generator app (https://wds-content-generator.vercel.app/) to create a square poster for socials and a similar aesthetics event banner for Meetup.' },
   { title: 'Newsletter Announcement', description: 'Include event in newsletter', category: 'Marketing' },
 
   // Coordination
