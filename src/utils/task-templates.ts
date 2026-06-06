@@ -16,15 +16,12 @@ export type TaskTemplate = {
 
 // Single source of truth for all task templates (easy to edit)
 export const TASKS: TaskTemplate[] = [
-  // Base
-  { title: 'Content Creation', description: 'Create content for the event or publication', category: 'Base' },
 
   // Marketing
-  { title: 'Pre-event Marketing', description: 'Promote the event before it happens', category: 'Marketing' },
+  { title: 'Pre-event Marketing', description: 'Come up with marketing content using the posters created', category: 'Marketing' },
   { title: 'Post-event Marketing', description: 'Share highlights and follow-up after the event', category: 'Marketing' },
-  { title: 'Social Media Promotion', description: 'Create and share social media content', category: 'Marketing' },
+  { title: 'Poster Making', description: 'Create posters (square and banner) for the event', category: 'Marketing' },
   { title: 'Newsletter Announcement', description: 'Include event in newsletter', category: 'Marketing' },
-  { title: 'Content Posting', description: 'Post prepared content across social platforms', category: 'Marketing' },
 
   // Coordination
   { title: 'Date Confirmation', description: 'Confirm the event date with all participants', category: 'Coordination' },
@@ -49,6 +46,7 @@ export const TASKS: TaskTemplate[] = [
 
   // Content
   { title: 'Content Planning', description: 'Plan content structure and topics', category: 'Content' },
+  { title: 'Contribute Article', description: 'Write an article or post for the newsletter', category: 'Content' },
   { title: 'Review and Editing', description: 'Review and edit content before publishing', category: 'Content' },
 
   // General
@@ -60,20 +58,20 @@ export const TASKS: TaskTemplate[] = [
 
 // Map of required tasks by event format. Use task TITLES from TASKS above.
 const REQUIRED_BY_FORMAT: Record<Event['format'] | 'default', string[]> = {
-  default: ['Content Creation', 'Pre-event Marketing', 'Post-event Marketing', 'Introduce WDS'],
-  panel: ['Content Creation', 'Pre-event Marketing', 'Post-event Marketing', 'Moderation', 'Date Confirmation', 'Speaker Confirmation', 'Introduce WDS', 'Internal Speaker'],
-  workshop: ['Content Creation', 'Pre-event Marketing', 'Post-event Marketing', 'Facilitation', 'Date Confirmation', 'Introduce WDS', 'Internal Speaker'],
-  conference: ['Content Creation', 'Pre-event Marketing', 'Post-event Marketing', 'Speaker Coordination', 'Date Confirmation', 'Introduce WDS'],
-  talk: ['Content Creation', 'Pre-event Marketing', 'Post-event Marketing', 'Speaker Coordination', 'Date Confirmation', 'Introduce WDS', 'Internal Speaker'],
-  external_speaker: ['Content Creation', 'Pre-event Marketing', 'Post-event Marketing', 'Speaker Coordination', 'Date Confirmation'],
-  others: ['Content Creation', 'Pre-event Marketing', 'Post-event Marketing'],
+  default: ['Poster Making', 'Pre-event Marketing', 'Post-event Marketing', 'Introduce WDS'],
+  panel: ['Poster Making', 'Pre-event Marketing', 'Post-event Marketing', 'Moderation', 'Speaker Confirmation', 'Introduce WDS'],
+  workshop: ['Poster Making', 'Pre-event Marketing', 'Post-event Marketing', 'Facilitation', 'Introduce WDS'],
+  conference: ['Poster Making', 'Pre-event Marketing', 'Post-event Marketing', 'Speaker Coordination', 'Introduce WDS'],
+  talk: ['Poster Making', 'Pre-event Marketing', 'Post-event Marketing', 'Speaker Coordination', 'Introduce WDS'],
+  external_speaker: ['Poster Making', 'Pre-event Marketing', 'Post-event Marketing', 'Speaker Coordination'],
+  others: ['Poster Making', 'Pre-event Marketing', 'Post-event Marketing'],
   meeting: ['Date Confirmation', 'Venue Coordination', 'Post-event Marketing'],
   hangout: ['Date Confirmation', 'Venue Coordination', 'Post-event Marketing'],
-  moderated_discussion: ['Content Creation', 'Pre-event Marketing', 'Post-event Marketing', 'Moderation', 'Topic Preparation'],
-  newsletter: ['Content Creation', 'Review and Editing'],
-  social_media_campaign: ['Content Planning', 'Content Creation', 'Content Posting'],
+  moderated_discussion: ['Poster Making', 'Pre-event Marketing', 'Post-event Marketing', 'Moderation', 'Topic Preparation'],
+  newsletter: ['Contribute Article', 'Review and Editing'],
+  social_media_campaign: ['Content Planning', 'Poster Making'],
   coding_project: [
-    'Content Creation',
+    'Poster Making',
     'Pre-event Marketing',
     'Post-event Marketing',
     'Code Repo Maintainer',
