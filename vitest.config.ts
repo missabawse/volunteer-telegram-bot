@@ -4,6 +4,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    env: {
+      NODE_ENV: 'development',
+      PGLITE_STORAGE: 'memory',
+    },
     setupFiles: ['./tests/setup.ts'],
     // Run tests in sequence to avoid PGlite memory issues
     pool: 'forks',

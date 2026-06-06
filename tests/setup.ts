@@ -22,7 +22,7 @@ beforeAll(async () => {
     
     await db.execute(sql`
       DO $$ BEGIN
-        CREATE TYPE event_format AS ENUM('moderated_discussion', 'conference', 'talk', 'hangout', 'meeting', 'external_speaker', 'newsletter', 'social_media_takeover', 'workshop', 'panel', 'others');
+        CREATE TYPE event_format AS ENUM('moderated_discussion', 'conference', 'talk', 'hangout', 'meeting', 'external_speaker', 'newsletter', 'social_media_campaign', 'coding_project', 'workshop', 'panel', 'others');
       EXCEPTION
         WHEN duplicate_object THEN null;
       END $$;
@@ -52,7 +52,8 @@ beforeAll(async () => {
         telegram_handle TEXT NOT NULL UNIQUE,
         status volunteer_status NOT NULL DEFAULT 'probation',
         commitments INTEGER NOT NULL DEFAULT 0,
-        probation_start_date TIMESTAMPTZ DEFAULT NOW(),
+        commit_count_start_date TIMESTAMPTZ DEFAULT NOW(),
+        probation_end_date TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
